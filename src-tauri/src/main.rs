@@ -13,6 +13,14 @@ use std::time::Instant;
 use tauri::State;
 use walkdir::WalkDir;
 
+// Symphonia imports for fast FLAC seeking
+use symphonia::core::audio::SampleBuffer;
+use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
+use symphonia::core::formats::{FormatOptions, SeekMode, SeekTo};
+use symphonia::core::io::MediaSourceStream;
+use symphonia::core::meta::MetadataOptions;
+use symphonia::core::probe::Hint;
+
 #[derive(Serialize, Deserialize, Default)]
 struct AppConfig {
     default_folder: Option<String>,
@@ -90,6 +98,131 @@ impl PlaybackState {
     }
 }
 
+// Custom FLAC source using symphonia for fast seeking
+struct SymphoniaFlacSource {
+    decoder: Box<dyn symphonia::core::codecs::Decoder>,
+    format: Box<dyn symphonia::core::formats::FormatReader>,
+    track_id: u32,
+    sample_rate: u32,
+    channels: u16,
+    current_samples: Vec<i16>,
+    sample_index: usize,
+}
+
+impl SymphoniaFlacSource {
+    fn new(path: &str, seek_secs: u64) -> Option<Self> {
+        let file = std::fs::File::open(path).ok()?;
+        let mss = MediaSourceStream::new(Box::new(file), Default::default());
+        
+        let mut hint = Hint::new();
+        hint.with_extension("flac");
+        
+        let format_opts = FormatOptions::default();
+        let metadata_opts = MetadataOptions::default();
+        let decoder_opts = DecoderOptions::default();
+        
+        let probed = symphonia::default::get_probe()
+            .format(&hint, mss, &format_opts, &metadata_opts)
+            .ok()?;
+        
+        let mut format = probed.format;
+        
+        let track = format.tracks()
+            .iter()
+            .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)?;
+        
+        let track_id = track.id;
+        let sample_rate = track.codec_params.sample_rate.unwrap_or(44100);
+        let channels = track.codec_params.channels.map(|c| c.count() as u16).unwrap_or(2);
+        
+        let mut decoder = symphonia::default::get_codecs()
+            .make(&track.codec_params, &decoder_opts)
+            .ok()?;
+        
+        // Seek if needed
+        if seek_secs > 0 {
+            let seek_ts = seek_secs * sample_rate as u64;
+            let _ = format.seek(
+                SeekMode::Accurate,
+                SeekTo::TimeStamp { ts: seek_ts, track_id },
+            );
+            decoder.reset();
+        }
+        
+        Some(Self {
+            decoder,
+            format,
+            track_id,
+            sample_rate,
+            channels,
+            current_samples: Vec::new(),
+            sample_index: 0,
+        })
+    }
+    
+    fn decode_next_packet(&mut self) -> bool {
+        loop {
+            match self.format.next_packet() {
+                Ok(packet) => {
+                    if packet.track_id() != self.track_id {
+                        continue;
+                    }
+                    
+                    match self.decoder.decode(&packet) {
+                        Ok(decoded) => {
+                            let spec = *decoded.spec();
+                            let duration = decoded.capacity() as u64;
+                            
+                            let mut sample_buf = SampleBuffer::<i16>::new(duration, spec);
+                            sample_buf.copy_interleaved_ref(decoded);
+                            
+                            self.current_samples = sample_buf.samples().to_vec();
+                            self.sample_index = 0;
+                            return true;
+                        }
+                        Err(_) => continue,
+                    }
+                }
+                Err(_) => return false,
+            }
+        }
+    }
+}
+
+impl Iterator for SymphoniaFlacSource {
+    type Item = i16;
+    
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.sample_index >= self.current_samples.len() {
+            if !self.decode_next_packet() {
+                return None;
+            }
+        }
+        
+        let sample = self.current_samples[self.sample_index];
+        self.sample_index += 1;
+        Some(sample)
+    }
+}
+
+impl rodio::Source for SymphoniaFlacSource {
+    fn current_frame_len(&self) -> Option<usize> {
+        Some(self.current_samples.len() - self.sample_index)
+    }
+    
+    fn channels(&self) -> u16 {
+        self.channels
+    }
+    
+    fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+    
+    fn total_duration(&self) -> Option<std::time::Duration> {
+        None
+    }
+}
+
 struct AudioPlayer {
     command_tx: Sender<AudioCommand>,
     playback_state: Arc<Mutex<PlaybackState>>,
@@ -111,23 +244,22 @@ impl AudioPlayer {
             let mut current_sink: Option<Sink> = None;
             
             fn play_file(path: &str, volume: f32, seek_secs: u64, stream_handle: &rodio::OutputStreamHandle) -> Option<Sink> {
-                use rodio::Source;
                 use std::path::Path;
                 
                 let ext = Path::new(path).extension()?.to_str()?.to_lowercase();
-                let file = File::open(path).ok()?;
-                let source = Decoder::new(BufReader::new(file)).ok()?;
                 let sink = Sink::try_new(stream_handle).ok()?;
                 sink.set_volume(volume);
                 
-                if seek_secs > 0 && ext == "flac" {
-                    // FLAC: use skip_duration (symphonia FLAC seeking is unreliable)
-                    let skipped = source.skip_duration(Duration::from_secs(seek_secs));
-                    sink.append(skipped);
+                if ext == "flac" {
+                    // FLAC: use custom symphonia source for fast seeking
+                    let source = SymphoniaFlacSource::new(path, seek_secs)?;
+                    sink.append(source);
                 } else {
+                    // MP3/WAV: use rodio decoder with try_seek
+                    let file = File::open(path).ok()?;
+                    let source = Decoder::new(BufReader::new(file)).ok()?;
                     sink.append(source);
                     if seek_secs > 0 {
-                        // MP3/WAV: use fast seek
                         let _ = sink.try_seek(Duration::from_secs(seek_secs));
                     }
                 }
