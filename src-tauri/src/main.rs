@@ -109,11 +109,32 @@ impl AppState {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 struct TrackInfo {
     path: String,
     name: String,
     index: usize,
+    duration: Option<u64>,
+}
+
+fn get_audio_duration(path: &str) -> Option<u64> {
+    let path_buf = std::path::Path::new(path);
+    let ext = path_buf.extension()?.to_str()?.to_lowercase();
+    
+    match ext.as_str() {
+        "mp3" => {
+            mp3_duration::from_path(path).ok().map(|d| d.as_secs())
+        }
+        _ => {
+            use rodio::{Decoder, Source};
+            use std::fs::File;
+            use std::io::BufReader;
+            
+            let file = File::open(path).ok()?;
+            let source = Decoder::new(BufReader::new(file)).ok()?;
+            source.total_duration().map(|d| d.as_secs())
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -156,10 +177,12 @@ fn load_folder(path: String, state: State<AppState>) -> Result<Vec<TrackInfo>, S
                 .file_name()
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_default();
+            let duration = get_audio_duration(p);
             TrackInfo {
                 path: p.clone(),
                 name,
                 index: i,
+                duration,
             }
         })
         .collect();
@@ -195,10 +218,13 @@ fn play_track(index: usize, state: State<AppState>) -> Result<TrackInfo, String>
     
     *state.current_track.lock().unwrap() = Some(name.clone());
     
+    let duration = get_audio_duration(&path);
+    
     Ok(TrackInfo {
         path,
         name,
         index,
+        duration,
     })
 }
 
@@ -258,10 +284,13 @@ fn next_track(state: State<AppState>) -> Result<TrackInfo, String> {
     
     *state.current_track.lock().unwrap() = Some(name.clone());
     
+    let duration = get_audio_duration(&path);
+    
     Ok(TrackInfo {
         path,
         name,
         index: next_index,
+        duration,
     })
 }
 
@@ -293,10 +322,13 @@ fn prev_track(state: State<AppState>) -> Result<TrackInfo, String> {
     
     *state.current_track.lock().unwrap() = Some(name.clone());
     
+    let duration = get_audio_duration(&path);
+    
     Ok(TrackInfo {
         path,
         name,
         index: prev_index,
+        duration,
     })
 }
 

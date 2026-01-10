@@ -440,10 +440,13 @@ function renderPlaylist() {
         if (isPlaying) classes.push('playing');
         if (isMatch) classes.push('match');
         
+        const duration = formatDuration(track.duration);
+        
         return `
             <div class="${classes.join(' ')}" data-index="${index}">
                 <span class="track-number">${String(index + 1).padStart(3, ' ')}</span>
                 <span class="track-item-name">${escapeHtml(track.name)}</span>
+                <span class="track-duration">${duration}</span>
                 <svg class="track-playing-indicator" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
                 </svg>
@@ -617,6 +620,15 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+function formatDuration(seconds) {
+    if (seconds === null || seconds === undefined) {
+        return '--:--';
+    }
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${String(secs).padStart(2, '0')}`;
 }
 
 // Start the app

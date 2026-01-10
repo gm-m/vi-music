@@ -8,6 +8,8 @@ A minimal, VIM-style music player built with Tauri and vanilla JavaScript.
 - **Supported formats**: MP3, WAV, FLAC
 - **Minimal, dark UI** with a focus on keyboard-driven interaction
 - **Command mode** for advanced operations
+- **Filter/search** to quickly find tracks
+- **Track duration display** in the playlist
 
 ## Keyboard Shortcuts
 
@@ -35,13 +37,22 @@ A minimal, VIM-style music player built with Tauri and vanilla JavaScript.
 | `-` | Volume down |
 | `m` | Mute/Unmute |
 
+### Filter/Search
+| Key | Action |
+|-----|--------|
+| `/` | Enter filter mode |
+| `n` | Jump to next match |
+| `N` | Jump to previous match |
+| `Enter` | Confirm filter |
+| `Esc` | Clear filter and exit |
+
 ### General
 | Key | Action |
 |-----|--------|
 | `o` | Open folder |
 | `:` | Enter command mode |
 | `?` | Toggle help |
-| `Esc` | Close modals / Exit command mode |
+| `Esc` | Close modals / Exit mode |
 
 ## Command Mode
 

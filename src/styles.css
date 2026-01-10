@@ -416,6 +416,14 @@ body {
     color: var(--warning);
 }
 
+.track-duration {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    min-width: 45px;
+    text-align: right;
+    margin-right: 8px;
+}
+
 .help-modal {
     position: fixed;
     top: 0;
