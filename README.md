@@ -72,6 +72,8 @@ Press `:` to enter command mode. Available commands:
 - `:next` or `:n` - Next track
 - `:prev` - Previous track
 - `:vol [0-100]` - Set volume
+- `:setdefault` or `:sd` - Set current folder as default (auto-loads on startup)
+- `:cleardefault` or `:cd` - Clear default folder
 - `:help` or `:h` - Show help
 - `:quit` or `:q` - Quit application
 

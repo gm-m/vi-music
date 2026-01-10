@@ -4,6 +4,7 @@
 )]
 
 use serde::{Deserialize, Serialize};
+use std::fs;
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
@@ -11,6 +12,36 @@ use std::thread;
 use std::time::Instant;
 use tauri::State;
 use walkdir::WalkDir;
+
+#[derive(Serialize, Deserialize, Default)]
+struct AppConfig {
+    default_folder: Option<String>,
+}
+
+fn get_config_path() -> Option<PathBuf> {
+    dirs::config_dir().map(|p| p.join("vi-music").join("config.json"))
+}
+
+fn load_config() -> AppConfig {
+    if let Some(path) = get_config_path() {
+        if let Ok(content) = fs::read_to_string(&path) {
+            if let Ok(config) = serde_json::from_str(&content) {
+                return config;
+            }
+        }
+    }
+    AppConfig::default()
+}
+
+fn save_config(config: &AppConfig) -> Result<(), String> {
+    let path = get_config_path().ok_or("Could not determine config path")?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let content = serde_json::to_string_pretty(config).map_err(|e| e.to_string())?;
+    fs::write(&path, content).map_err(|e| e.to_string())?;
+    Ok(())
+}
 
 #[derive(Clone)]
 enum AudioCommand {
@@ -535,6 +566,25 @@ fn seek_relative(delta: i64, state: State<AppState>) -> Result<u64, String> {
     Ok(new_pos)
 }
 
+#[tauri::command]
+fn get_default_folder() -> Option<String> {
+    load_config().default_folder
+}
+
+#[tauri::command]
+fn set_default_folder(path: String) -> Result<(), String> {
+    let mut config = load_config();
+    config.default_folder = Some(path);
+    save_config(&config)
+}
+
+#[tauri::command]
+fn clear_default_folder() -> Result<(), String> {
+    let mut config = load_config();
+    config.default_folder = None;
+    save_config(&config)
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(AppState::new())
@@ -549,6 +599,9 @@ fn main() {
             get_status,
             seek,
             seek_relative,
+            get_default_folder,
+            set_default_folder,
+            clear_default_folder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

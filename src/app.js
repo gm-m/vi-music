@@ -62,6 +62,18 @@ async function init() {
     setupEventListeners();
     await refreshStatus();
     startProgressUpdater();
+    await loadDefaultFolder();
+}
+
+async function loadDefaultFolder() {
+    try {
+        const defaultFolder = await invoke('get_default_folder');
+        if (defaultFolder) {
+            await loadFolder(defaultFolder);
+        }
+    } catch (err) {
+        console.error('Failed to load default folder:', err);
+    }
 }
 
 // Event Listeners
@@ -272,6 +284,41 @@ function executeCommand(cmd) {
         case 'h':
             toggleHelp();
             break;
+        case 'setdefault':
+        case 'sd':
+            setDefaultFolder();
+            break;
+        case 'cleardefault':
+        case 'cd':
+            clearDefaultFolder();
+            break;
+    }
+}
+
+async function setDefaultFolder() {
+    try {
+        const selected = await open({
+            directory: true,
+            multiple: false,
+            title: 'Select Default Music Folder'
+        });
+        
+        if (selected) {
+            await invoke('set_default_folder', { path: selected });
+            await loadFolder(selected);
+            updateStatus('Default folder set');
+        }
+    } catch (err) {
+        console.error('Failed to set default folder:', err);
+    }
+}
+
+async function clearDefaultFolder() {
+    try {
+        await invoke('clear_default_folder');
+        updateStatus('Default folder cleared');
+    } catch (err) {
+        console.error('Failed to clear default folder:', err);
     }
 }
 
