@@ -13,13 +13,15 @@ if (window.__TAURI__) {
 // State
 const state = {
     playlist: [],
+    filteredPlaylist: [],
+    filterText: '',
     selectedIndex: 0,
     playingIndex: -1,
     isPlaying: false,
     isPaused: false,
     volume: 1.0,
     previousVolume: 1.0,
-    mode: 'normal', // 'normal' | 'command'
+    mode: 'normal', // 'normal' | 'command' | 'filter'
     pendingKey: null, // for multi-key commands like 'gg'
 };
 
@@ -42,6 +44,8 @@ const elements = {
     helpBar: document.getElementById('helpBar'),
     commandLine: document.getElementById('commandLine'),
     commandInput: document.getElementById('commandInput'),
+    filterLine: document.getElementById('filterLine'),
+    filterInput: document.getElementById('filterInput'),
     helpModal: document.getElementById('helpModal'),
 };
 
@@ -63,12 +67,16 @@ function setupEventListeners() {
     
     elements.commandInput.addEventListener('keydown', handleCommandInput);
     elements.commandInput.addEventListener('blur', exitCommandMode);
+    
+    elements.filterInput.addEventListener('input', handleFilterInput);
+    elements.filterInput.addEventListener('keydown', handleFilterKeydown);
+    elements.filterInput.addEventListener('blur', exitFilterMode);
 }
 
 // Keyboard Handler
 function handleKeyDown(e) {
-    // Ignore if typing in command input
-    if (state.mode === 'command') {
+    // Ignore if typing in command or filter input
+    if (state.mode === 'command' || state.mode === 'filter') {
         return;
     }
     
@@ -134,6 +142,16 @@ function handleKeyDown(e) {
             break;
         case ':':
             enterCommandMode();
+            break;
+        case '/':
+            e.preventDefault();
+            enterFilterMode();
+            break;
+        case 'n':
+            jumpToNextMatch();
+            break;
+        case 'N':
+            jumpToPrevMatch();
             break;
         case '?':
             toggleHelp();
@@ -411,12 +429,16 @@ function renderPlaylist() {
     
     elements.playlistCount.textContent = `${state.playlist.length} tracks`;
     
+    const matchedIndices = new Set(state.filteredPlaylist.map(({ index }) => index));
+    
     elements.playlist.innerHTML = state.playlist.map((track, index) => {
         const isSelected = index === state.selectedIndex;
         const isPlaying = index === state.playingIndex;
+        const isMatch = state.filterText && matchedIndices.has(index);
         const classes = ['track-item'];
         if (isSelected) classes.push('selected');
         if (isPlaying) classes.push('playing');
+        if (isMatch) classes.push('match');
         
         return `
             <div class="${classes.join(' ')}" data-index="${index}">
@@ -490,6 +512,103 @@ function closeModals() {
     elements.helpModal.classList.remove('visible');
     if (state.mode === 'command') {
         exitCommandMode();
+    }
+    if (state.mode === 'filter') {
+        exitFilterMode();
+    }
+}
+
+// Filter Mode
+function enterFilterMode() {
+    state.mode = 'filter';
+    elements.modeIndicator.textContent = 'FILTER';
+    elements.modeIndicator.classList.add('filter');
+    elements.helpBar.style.display = 'none';
+    elements.filterLine.style.display = 'flex';
+    elements.filterInput.value = state.filterText;
+    elements.filterInput.focus();
+    elements.filterInput.select();
+}
+
+function exitFilterMode() {
+    state.mode = 'normal';
+    elements.modeIndicator.textContent = 'NORMAL';
+    elements.modeIndicator.classList.remove('filter');
+    elements.helpBar.style.display = 'flex';
+    elements.filterLine.style.display = 'none';
+}
+
+function handleFilterInput(e) {
+    state.filterText = elements.filterInput.value;
+    applyFilter();
+}
+
+function handleFilterKeydown(e) {
+    if (e.key === 'Enter') {
+        exitFilterMode();
+        if (state.filteredPlaylist.length > 0) {
+            jumpToNextMatch();
+        }
+    } else if (e.key === 'Escape') {
+        clearFilter();
+        exitFilterMode();
+    }
+}
+
+function applyFilter() {
+    if (!state.filterText) {
+        state.filteredPlaylist = [];
+        renderPlaylist();
+        return;
+    }
+    
+    const query = state.filterText.toLowerCase();
+    state.filteredPlaylist = state.playlist
+        .map((track, index) => ({ track, index }))
+        .filter(({ track }) => track.name.toLowerCase().includes(query));
+    
+    renderPlaylist();
+    updateFilterStatus();
+}
+
+function clearFilter() {
+    state.filterText = '';
+    state.filteredPlaylist = [];
+    elements.filterInput.value = '';
+    renderPlaylist();
+}
+
+function jumpToNextMatch() {
+    if (state.filteredPlaylist.length === 0) return;
+    
+    const currentIdx = state.selectedIndex;
+    const nextMatch = state.filteredPlaylist.find(({ index }) => index > currentIdx);
+    
+    if (nextMatch) {
+        selectTrack(nextMatch.index);
+    } else {
+        selectTrack(state.filteredPlaylist[0].index);
+    }
+}
+
+function jumpToPrevMatch() {
+    if (state.filteredPlaylist.length === 0) return;
+    
+    const currentIdx = state.selectedIndex;
+    const matches = state.filteredPlaylist.filter(({ index }) => index < currentIdx);
+    
+    if (matches.length > 0) {
+        selectTrack(matches[matches.length - 1].index);
+    } else {
+        selectTrack(state.filteredPlaylist[state.filteredPlaylist.length - 1].index);
+    }
+}
+
+function updateFilterStatus() {
+    if (state.filterText && state.filteredPlaylist.length > 0) {
+        updateStatus(`${state.filteredPlaylist.length} matches`);
+    } else if (state.filterText) {
+        updateStatus('No matches');
     }
 }
 

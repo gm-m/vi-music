@@ -379,6 +379,43 @@ body {
     outline: none;
 }
 
+.filter-line {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.filter-prompt {
+    color: var(--warning);
+    font-weight: 600;
+}
+
+.filter-line input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.85rem;
+    outline: none;
+}
+
+.filter-line input::placeholder {
+    color: var(--text-muted);
+}
+
+.mode-indicator.filter {
+    background: var(--warning);
+}
+
+.track-item.match {
+    background: rgba(210, 153, 34, 0.15);
+}
+
+.track-item.match .track-item-name {
+    color: var(--warning);
+}
+
 .help-modal {
     position: fixed;
     top: 0;

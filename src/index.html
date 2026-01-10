@@ -84,11 +84,16 @@
                 <span><kbd>J</kbd>/<kbd>K</kbd> next/prev</span>
                 <span><kbd>+</kbd>/<kbd>-</kbd> volume</span>
                 <span><kbd>o</kbd> open</span>
+                <span><kbd>/</kbd> filter</span>
                 <span><kbd>?</kbd> help</span>
             </div>
             <div class="command-line" id="commandLine" style="display: none;">
                 <span class="command-prompt">:</span>
                 <input type="text" id="commandInput" autocomplete="off">
+            </div>
+            <div class="filter-line" id="filterLine" style="display: none;">
+                <span class="filter-prompt">/</span>
+                <input type="text" id="filterInput" autocomplete="off" placeholder="filter...">
             </div>
         </footer>
     </div>
@@ -121,6 +126,9 @@
                 <div class="help-section">
                     <h3>General</h3>
                     <div class="shortcut"><kbd>o</kbd> Open folder</div>
+                    <div class="shortcut"><kbd>/</kbd> Filter tracks</div>
+                    <div class="shortcut"><kbd>n</kbd> Next match</div>
+                    <div class="shortcut"><kbd>N</kbd> Previous match</div>
                     <div class="shortcut"><kbd>:</kbd> Command mode</div>
                     <div class="shortcut"><kbd>?</kbd> Toggle help</div>
                     <div class="shortcut"><kbd>Esc</kbd> Close/Cancel</div>
