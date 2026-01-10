@@ -21,8 +21,9 @@ const state = {
     isPaused: false,
     volume: 1.0,
     previousVolume: 1.0,
-    mode: 'normal', // 'normal' | 'command' | 'filter'
+    mode: 'normal', // 'normal' | 'command' | 'filter' | 'visual'
     pendingKey: null, // for multi-key commands like 'gg'
+    visualStart: -1, // Start index for visual selection
     elapsed: 0,
     duration: null,
     progressInterval: null,
@@ -126,6 +127,12 @@ function handleKeyDown(e) {
         return;
     }
     
+    // Visual mode has its own key handling
+    if (state.mode === 'visual') {
+        handleVisualModeKeyDown(e);
+        return;
+    }
+    
     // Handle multi-key commands
     if (state.pendingKey === 'g') {
         if (e.key === 'g') {
@@ -224,6 +231,9 @@ function handleKeyDown(e) {
             break;
         case 'd':
             state.pendingKey = 'd';
+            break;
+        case 'v':
+            enterVisualMode();
             break;
             
         // General
@@ -760,6 +770,92 @@ function updateQueueDisplay() {
     }
 }
 
+// Visual Mode
+function enterVisualMode() {
+    if (state.playlist.length === 0) return;
+    
+    state.mode = 'visual';
+    state.visualStart = state.selectedIndex;
+    updateModeIndicators();
+    renderPlaylist();
+}
+
+function exitVisualMode() {
+    state.mode = 'normal';
+    state.visualStart = -1;
+    updateModeIndicators();
+    renderPlaylist();
+}
+
+function getVisualSelection() {
+    if (state.visualStart === -1) return [];
+    const start = Math.min(state.visualStart, state.selectedIndex);
+    const end = Math.max(state.visualStart, state.selectedIndex);
+    const indices = [];
+    for (let i = start; i <= end; i++) {
+        indices.push(i);
+    }
+    return indices;
+}
+
+function addVisualSelectionToQueue() {
+    const selection = getVisualSelection();
+    if (selection.length === 0) return;
+    
+    selection.forEach(index => {
+        state.queue.push(index);
+    });
+    
+    updateQueueDisplay();
+    updateStatus(`Added ${selection.length} tracks to queue`);
+    exitVisualMode();
+}
+
+function handleVisualModeKeyDown(e) {
+    // Handle multi-key commands in visual mode
+    if (state.pendingKey === 'g') {
+        if (e.key === 'g') {
+            state.selectedIndex = 0;
+            renderPlaylist();
+            scrollToSelected();
+        }
+        state.pendingKey = null;
+        return;
+    }
+    
+    switch (e.key) {
+        case 'j':
+            if (state.selectedIndex < state.playlist.length - 1) {
+                state.selectedIndex++;
+                renderPlaylist();
+                scrollToSelected();
+            }
+            break;
+        case 'k':
+            if (state.selectedIndex > 0) {
+                state.selectedIndex--;
+                renderPlaylist();
+                scrollToSelected();
+            }
+            break;
+        case 'g':
+            state.pendingKey = 'g';
+            break;
+        case 'G':
+            state.selectedIndex = state.playlist.length - 1;
+            renderPlaylist();
+            scrollToSelected();
+            break;
+        case 'a':
+            addVisualSelectionToQueue();
+            break;
+        case 'v':
+        case 'Escape':
+            exitVisualMode();
+            break;
+    }
+}
+
 // Queue View
 function toggleQueueView() {
     if (state.queueViewOpen) {
@@ -925,14 +1021,19 @@ function renderPlaylist() {
     
     const matchedIndices = new Set(state.filteredPlaylist.map(({ index }) => index));
     
+    const visualSelection = state.mode === 'visual' ? getVisualSelection() : [];
+    const visualSet = new Set(visualSelection);
+    
     elements.playlist.innerHTML = state.playlist.map((track, index) => {
         const isSelected = index === state.selectedIndex;
         const isPlaying = index === state.playingIndex;
         const isMatch = state.filterText && matchedIndices.has(index);
+        const isVisualSelected = visualSet.has(index);
         const classes = ['track-item'];
         if (isSelected) classes.push('selected');
         if (isPlaying) classes.push('playing');
         if (isMatch) classes.push('match');
+        if (isVisualSelected) classes.push('visual-selected');
         
         const duration = formatDuration(track.duration);
         

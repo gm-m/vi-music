@@ -85,6 +85,15 @@ A minimal, VIM-style music player built with Tauri and vanilla JavaScript.
 | `?` | Toggle help |
 | `Esc` | Close modals / Exit mode |
 
+### Visual Mode
+| Key | Action |
+|-----|--------|
+| `v` | Enter visual mode (multi-select) |
+| `j` / `k` | Extend selection up/down |
+| `gg` / `G` | Extend to top/bottom |
+| `a` | Add selection to queue |
+| `v` / `Esc` | Exit visual mode |
+
 ## Command Mode
 
 Press `:` to enter command mode. Available commands:

@@ -353,6 +353,14 @@ body {
     color: var(--accent);
 }
 
+.track-item.visual-selected {
+    background: rgba(88, 166, 255, 0.2);
+}
+
+.track-item.visual-selected.selected {
+    background: var(--selection);
+}
+
 .track-number {
     font-size: 0.75rem;
     color: var(--text-muted);
