@@ -215,7 +215,11 @@ function handleKeyDown(e) {
             toggleHelp();
             break;
         case 'Escape':
-            closeModals();
+            if (state.filterText) {
+                clearFilter();
+            } else {
+                closeModals();
+            }
             break;
     }
 }
@@ -233,7 +237,7 @@ function enterCommandMode() {
 
 function exitCommandMode() {
     state.mode = 'normal';
-    elements.modeIndicator.textContent = 'NORMAL';
+    updateModeIndicators();
     elements.modeIndicator.classList.remove('command');
     elements.helpBar.style.display = 'flex';
     elements.commandLine.style.display = 'none';
@@ -565,6 +569,10 @@ function toggleRepeat() {
     const modes = ['off', 'one', 'all'];
     const currentIndex = modes.indexOf(state.repeatMode);
     state.repeatMode = modes[(currentIndex + 1) % modes.length];
+    // Disable shuffle when enabling repeat-one as they conflict
+    if (state.repeatMode === 'one' && state.shuffleMode) {
+        state.shuffleMode = false;
+    }
     updateModeIndicators();
     updateStatus(`Repeat: ${state.repeatMode}`);
 }
@@ -575,6 +583,10 @@ function toggleShuffle() {
         // Reset shuffle history when enabling
         state.shuffleHistory = [];
         state.shuffleIndex = -1;
+        // Disable repeat-one as it conflicts with shuffle
+        if (state.repeatMode === 'one') {
+            state.repeatMode = 'off';
+        }
     }
     updateModeIndicators();
     updateStatus(`Shuffle: ${state.shuffleMode ? 'on' : 'off'}`);
@@ -811,7 +823,7 @@ function enterFilterMode() {
 
 function exitFilterMode() {
     state.mode = 'normal';
-    elements.modeIndicator.textContent = 'NORMAL';
+    updateModeIndicators();
     elements.modeIndicator.classList.remove('filter');
     elements.helpBar.style.display = 'flex';
     elements.filterLine.style.display = 'none';
