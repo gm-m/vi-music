@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VI Music</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1 class="logo">VI Music</h1>
+            <div class="mode-indicator" id="modeIndicator">NORMAL</div>
+        </header>
+
+        <main class="main">
+            <div class="player-section">
+                <div class="now-playing">
+                    <div class="track-art">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+                        </svg>
+                    </div>
+                    <div class="track-info">
+                        <div class="track-name" id="trackName">No track selected</div>
+                        <div class="track-status" id="trackStatus">Press 'o' to open folder</div>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <button class="control-btn" id="prevBtn" title="Previous (K)">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+                        </svg>
+                    </button>
+                    <button class="control-btn play-btn" id="playBtn" title="Play/Pause (Space)">
+                        <svg viewBox="0 0 24 24" fill="currentColor" id="playIcon">
+                            <path d="M8 5v14l11-7z"/>
+                        </svg>
+                        <svg viewBox="0 0 24 24" fill="currentColor" id="pauseIcon" style="display: none;">
+                            <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                        </svg>
+                    </button>
+                    <button class="control-btn" id="stopBtn" title="Stop (s)">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M6 6h12v12H6z"/>
+                        </svg>
+                    </button>
+                    <button class="control-btn" id="nextBtn" title="Next (J)">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="volume-section">
+                    <span class="volume-label">VOL</span>
+                    <div class="volume-bar">
+                        <div class="volume-fill" id="volumeFill"></div>
+                    </div>
+                    <span class="volume-value" id="volumeValue">100%</span>
+                </div>
+            </div>
+
+            <div class="playlist-section">
+                <div class="playlist-header">
+                    <span class="playlist-title">Playlist</span>
+                    <span class="playlist-count" id="playlistCount">0 tracks</span>
+                </div>
+                <div class="playlist" id="playlist">
+                    <div class="empty-playlist">
+                        <p>No tracks loaded</p>
+                        <p class="hint">Press <kbd>o</kbd> to open a folder</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <div class="help-bar" id="helpBar">
+                <span><kbd>j</kbd>/<kbd>k</kbd> navigate</span>
+                <span><kbd>Enter</kbd> play</span>
+                <span><kbd>Space</kbd> pause</span>
+                <span><kbd>J</kbd>/<kbd>K</kbd> next/prev</span>
+                <span><kbd>+</kbd>/<kbd>-</kbd> volume</span>
+                <span><kbd>o</kbd> open</span>
+                <span><kbd>?</kbd> help</span>
+            </div>
+            <div class="command-line" id="commandLine" style="display: none;">
+                <span class="command-prompt">:</span>
+                <input type="text" id="commandInput" autocomplete="off">
+            </div>
+        </footer>
+    </div>
+
+    <div class="help-modal" id="helpModal">
+        <div class="help-content">
+            <h2>Keyboard Shortcuts</h2>
+            <div class="help-grid">
+                <div class="help-section">
+                    <h3>Navigation</h3>
+                    <div class="shortcut"><kbd>j</kbd> Move down</div>
+                    <div class="shortcut"><kbd>k</kbd> Move up</div>
+                    <div class="shortcut"><kbd>g</kbd><kbd>g</kbd> Go to top</div>
+                    <div class="shortcut"><kbd>G</kbd> Go to bottom</div>
+                </div>
+                <div class="help-section">
+                    <h3>Playback</h3>
+                    <div class="shortcut"><kbd>Enter</kbd> Play selected</div>
+                    <div class="shortcut"><kbd>Space</kbd> Toggle pause</div>
+                    <div class="shortcut"><kbd>s</kbd> Stop</div>
+                    <div class="shortcut"><kbd>J</kbd> Next track</div>
+                    <div class="shortcut"><kbd>K</kbd> Previous track</div>
+                </div>
+                <div class="help-section">
+                    <h3>Volume</h3>
+                    <div class="shortcut"><kbd>+</kbd> / <kbd>=</kbd> Volume up</div>
+                    <div class="shortcut"><kbd>-</kbd> Volume down</div>
+                    <div class="shortcut"><kbd>m</kbd> Mute/Unmute</div>
+                </div>
+                <div class="help-section">
+                    <h3>General</h3>
+                    <div class="shortcut"><kbd>o</kbd> Open folder</div>
+                    <div class="shortcut"><kbd>:</kbd> Command mode</div>
+                    <div class="shortcut"><kbd>?</kbd> Toggle help</div>
+                    <div class="shortcut"><kbd>Esc</kbd> Close/Cancel</div>
+                </div>
+            </div>
+            <p class="help-footer">Press <kbd>Esc</kbd> or <kbd>?</kbd> to close</p>
+        </div>
+    </div>
+
+    <script src="app.js" type="module"></script>
+</body>
+</html>
