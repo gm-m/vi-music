@@ -45,6 +45,12 @@ A minimal, VIM-style music player built with Tauri and vanilla JavaScript.
 | `L` (Shift+l) | Seek forward 30 seconds |
 | `H` (Shift+h) | Seek backward 30 seconds |
 
+### Repeat & Shuffle
+| Key | Action |
+|-----|--------|
+| `r` | Toggle repeat mode (off → one → all) |
+| `S` (Shift+s) | Toggle shuffle mode |
+
 ### Filter/Search
 | Key | Action |
 |-----|--------|

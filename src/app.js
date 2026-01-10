@@ -26,6 +26,10 @@ const state = {
     elapsed: 0,
     duration: null,
     progressInterval: null,
+    repeatMode: 'off', // 'off' | 'one' | 'all'
+    shuffleMode: false,
+    shuffleHistory: [],
+    shuffleIndex: -1,
 };
 
 // DOM Elements
@@ -179,6 +183,14 @@ function handleKeyDown(e) {
             break;
         case 'H':
             seekRelative(-30);
+            break;
+        
+        // Repeat & Shuffle
+        case 'r':
+            toggleRepeat();
+            break;
+        case 'S':
+            toggleShuffle();
             break;
             
         // General
@@ -409,12 +421,18 @@ async function stop() {
 }
 
 async function nextTrack() {
+    if (state.shuffleMode && state.isPlaying) {
+        playNextShuffle();
+        return;
+    }
+    
     try {
         const result = await invoke('next_track');
         state.playingIndex = result.index;
         state.selectedIndex = result.index;
         state.isPlaying = true;
         state.isPaused = false;
+        state.duration = result.duration;
         updateNowPlaying(result.name);
         renderPlaylist();
         updatePlayButton();
@@ -425,12 +443,18 @@ async function nextTrack() {
 }
 
 async function prevTrack() {
+    if (state.shuffleMode && state.isPlaying) {
+        playPrevShuffle();
+        return;
+    }
+    
     try {
         const result = await invoke('prev_track');
         state.playingIndex = result.index;
         state.selectedIndex = result.index;
         state.isPlaying = true;
         state.isPaused = false;
+        state.duration = result.duration;
         updateNowPlaying(result.name);
         renderPlaylist();
         updatePlayButton();
@@ -508,13 +532,7 @@ async function updateProgress() {
         
         // Check if track finished
         if (status.is_finished) {
-            state.isPlaying = false;
-            elements.playIcon.style.display = 'block';
-            elements.pauseIcon.style.display = 'none';
-            // Cap progress at 100%
-            if (state.duration) {
-                state.elapsed = state.duration;
-            }
+            handleTrackEnd();
         }
         
         updateProgressDisplay();
@@ -540,6 +558,104 @@ function resetProgressDisplay() {
     elements.timeElapsed.textContent = '0:00';
     elements.timeTotal.textContent = formatDuration(state.duration);
     elements.progressFill.style.width = '0%';
+}
+
+// Repeat & Shuffle
+function toggleRepeat() {
+    const modes = ['off', 'one', 'all'];
+    const currentIndex = modes.indexOf(state.repeatMode);
+    state.repeatMode = modes[(currentIndex + 1) % modes.length];
+    updateModeIndicators();
+    updateStatus(`Repeat: ${state.repeatMode}`);
+}
+
+function toggleShuffle() {
+    state.shuffleMode = !state.shuffleMode;
+    if (state.shuffleMode) {
+        // Reset shuffle history when enabling
+        state.shuffleHistory = [];
+        state.shuffleIndex = -1;
+    }
+    updateModeIndicators();
+    updateStatus(`Shuffle: ${state.shuffleMode ? 'on' : 'off'}`);
+}
+
+function updateModeIndicators() {
+    let modeText = state.mode.toUpperCase();
+    const indicators = [];
+    if (state.repeatMode !== 'off') {
+        indicators.push(state.repeatMode === 'one' ? 'R1' : 'RA');
+    }
+    if (state.shuffleMode) {
+        indicators.push('S');
+    }
+    if (indicators.length > 0) {
+        modeText += ` [${indicators.join(' ')}]`;
+    }
+    elements.modeIndicator.textContent = modeText;
+}
+
+function handleTrackEnd() {
+    // Cap progress at 100%
+    if (state.duration) {
+        state.elapsed = state.duration;
+    }
+    updateProgressDisplay();
+    
+    if (state.repeatMode === 'one') {
+        // Repeat current track
+        playTrack(state.playingIndex);
+    } else if (state.shuffleMode) {
+        // Play random track
+        playNextShuffle();
+    } else if (state.repeatMode === 'all') {
+        // Play next, wrap around
+        const nextIndex = (state.playingIndex + 1) % state.playlist.length;
+        playTrack(nextIndex);
+    } else {
+        // No repeat - play next if not at end
+        if (state.playingIndex < state.playlist.length - 1) {
+            playTrack(state.playingIndex + 1);
+        } else {
+            // End of playlist
+            state.isPlaying = false;
+            elements.playIcon.style.display = 'block';
+            elements.pauseIcon.style.display = 'none';
+        }
+    }
+}
+
+function playNextShuffle() {
+    if (state.playlist.length === 0) return;
+    
+    // If we're not at the end of history, go forward
+    if (state.shuffleIndex < state.shuffleHistory.length - 1) {
+        state.shuffleIndex++;
+        playTrack(state.shuffleHistory[state.shuffleIndex]);
+        return;
+    }
+    
+    // Pick a random track (avoid current if possible)
+    let nextIndex;
+    if (state.playlist.length === 1) {
+        nextIndex = 0;
+    } else {
+        do {
+            nextIndex = Math.floor(Math.random() * state.playlist.length);
+        } while (nextIndex === state.playingIndex);
+    }
+    
+    state.shuffleHistory.push(nextIndex);
+    state.shuffleIndex = state.shuffleHistory.length - 1;
+    playTrack(nextIndex);
+}
+
+function playPrevShuffle() {
+    if (state.shuffleHistory.length === 0 || state.shuffleIndex <= 0) {
+        return;
+    }
+    state.shuffleIndex--;
+    playTrack(state.shuffleHistory[state.shuffleIndex]);
 }
 
 // Folder Loading
