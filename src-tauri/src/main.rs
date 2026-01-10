@@ -60,6 +60,7 @@ struct PlaybackState {
     pause_time: Option<Instant>,
     current_path: Option<String>,
     duration: Option<u64>,
+    is_finished: bool,
 }
 
 impl PlaybackState {
@@ -71,6 +72,7 @@ impl PlaybackState {
             pause_time: None,
             current_path: None,
             duration: None,
+            is_finished: false,
         }
     }
     
@@ -133,8 +135,19 @@ impl AudioPlayer {
             }
             
             loop {
-                if let Ok(cmd) = rx.recv() {
-                    match cmd {
+                // Check if track finished
+                if let Some(ref sink) = current_sink {
+                    if sink.empty() {
+                        let mut state = state_clone.lock().unwrap();
+                        if !state.is_finished && state.start_time.is_some() {
+                            state.is_finished = true;
+                        }
+                    }
+                }
+                
+                // Use timeout to periodically check sink status
+                match rx.recv_timeout(Duration::from_millis(100)) {
+                    Ok(cmd) => match cmd {
                         AudioCommand::Play(path, volume, skip_secs) => {
                             if let Some(sink) = current_sink.take() {
                                 sink.stop();
@@ -148,6 +161,7 @@ impl AudioPlayer {
                                 state.is_paused = false;
                                 state.pause_time = None;
                                 state.current_path = Some(path);
+                                state.is_finished = false;
                             }
                         }
                         AudioCommand::Pause => {
@@ -237,10 +251,14 @@ impl AudioPlayer {
                                         state.start_position = position;
                                         state.is_paused = false;
                                         state.pause_time = None;
+                                        state.is_finished = false;
                                     }
                                 }
                             }
                         }
+                    },
+                    Err(_) => {
+                        // Timeout - continue loop to check sink status
                     }
                 }
             }
@@ -255,6 +273,10 @@ impl AudioPlayer {
     
     fn get_elapsed(&self) -> u64 {
         self.playback_state.lock().unwrap().get_elapsed()
+    }
+    
+    fn is_finished(&self) -> bool {
+        self.playback_state.lock().unwrap().is_finished
     }
 }
 
@@ -316,6 +338,7 @@ fn get_audio_duration(path: &str) -> Option<u64> {
 struct PlayerStatus {
     is_playing: bool,
     is_paused: bool,
+    is_finished: bool,
     current_track: Option<String>,
     current_index: usize,
     volume: f32,
@@ -525,6 +548,7 @@ fn get_status(state: State<AppState>) -> PlayerStatus {
     PlayerStatus {
         is_playing: *state.is_playing.lock().unwrap(),
         is_paused: *state.is_paused.lock().unwrap(),
+        is_finished: state.player.is_finished(),
         current_track: state.current_track.lock().unwrap().clone(),
         current_index: *state.current_index.lock().unwrap(),
         volume: *state.volume.lock().unwrap(),

@@ -505,6 +505,18 @@ async function updateProgress() {
         const status = await invoke('get_status');
         state.elapsed = status.elapsed;
         state.duration = status.duration;
+        
+        // Check if track finished
+        if (status.is_finished) {
+            state.isPlaying = false;
+            elements.playIcon.style.display = 'block';
+            elements.pauseIcon.style.display = 'none';
+            // Cap progress at 100%
+            if (state.duration) {
+                state.elapsed = state.duration;
+            }
+        }
+        
         updateProgressDisplay();
     } catch (err) {
         // Ignore errors
