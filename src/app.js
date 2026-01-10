@@ -30,6 +30,9 @@ const state = {
     shuffleMode: false,
     shuffleHistory: [],
     shuffleIndex: -1,
+    queue: [], // Array of playlist indices to play next
+    queueViewOpen: false,
+    queueSelectedIndex: 0,
 };
 
 // DOM Elements
@@ -58,6 +61,8 @@ const elements = {
     progressFill: document.getElementById('progressFill'),
     timeElapsed: document.getElementById('timeElapsed'),
     timeTotal: document.getElementById('timeTotal'),
+    queueModal: document.getElementById('queueModal'),
+    queueList: document.getElementById('queueList'),
 };
 
 // Initialize
@@ -115,10 +120,24 @@ function handleKeyDown(e) {
         return;
     }
     
+    // Queue view has its own key handling
+    if (state.queueViewOpen) {
+        handleQueueViewKeyDown(e);
+        return;
+    }
+    
     // Handle multi-key commands
     if (state.pendingKey === 'g') {
         if (e.key === 'g') {
             goToTop();
+        }
+        state.pendingKey = null;
+        return;
+    }
+    
+    if (state.pendingKey === 'd') {
+        if (e.key === 'd') {
+            // dd in normal mode does nothing
         }
         state.pendingKey = null;
         return;
@@ -191,6 +210,20 @@ function handleKeyDown(e) {
             break;
         case 'S':
             toggleShuffle();
+            break;
+        
+        // Queue
+        case 'a':
+            addToQueue();
+            break;
+        case 'A':
+            addToQueueAndPlay();
+            break;
+        case 'q':
+            toggleQueueView();
+            break;
+        case 'd':
+            state.pendingKey = 'd';
             break;
             
         // General
@@ -601,6 +634,9 @@ function updateModeIndicators() {
     if (state.shuffleMode) {
         indicators.push('S');
     }
+    if (state.queue.length > 0) {
+        indicators.push(`Q:${state.queue.length}`);
+    }
     if (indicators.length > 0) {
         modeText += ` [${indicators.join(' ')}]`;
     }
@@ -613,6 +649,14 @@ function handleTrackEnd() {
         state.elapsed = state.duration;
     }
     updateProgressDisplay();
+    
+    // Check queue first (unless repeat-one is active)
+    if (state.repeatMode !== 'one' && state.queue.length > 0) {
+        const nextIndex = state.queue.shift();
+        playTrack(nextIndex);
+        updateQueueDisplay();
+        return;
+    }
     
     if (state.repeatMode === 'one') {
         // Repeat current track
@@ -668,6 +712,168 @@ function playPrevShuffle() {
     }
     state.shuffleIndex--;
     playTrack(state.shuffleHistory[state.shuffleIndex]);
+}
+
+// Queue
+function addToQueue() {
+    if (state.playlist.length === 0) return;
+    
+    const track = state.playlist[state.selectedIndex];
+    state.queue.push(state.selectedIndex);
+    updateQueueDisplay();
+    updateStatus(`Added to queue: ${track.name} (${state.queue.length} in queue)`);
+}
+
+function addToQueueAndPlay() {
+    if (state.playlist.length === 0) return;
+    
+    // If nothing is playing, just play the selected track
+    if (!state.isPlaying) {
+        playSelected();
+        return;
+    }
+    
+    // Add to queue
+    addToQueue();
+}
+
+function clearQueue() {
+    state.queue = [];
+    updateQueueDisplay();
+    updateStatus('Queue cleared');
+}
+
+function playFromQueue() {
+    if (state.queue.length === 0) return;
+    
+    const nextIndex = state.queue.shift();
+    playTrack(nextIndex);
+    updateQueueDisplay();
+}
+
+function updateQueueDisplay() {
+    // Update mode indicator to show queue count
+    updateModeIndicators();
+    // Re-render queue view if open
+    if (state.queueViewOpen) {
+        renderQueueView();
+    }
+}
+
+// Queue View
+function toggleQueueView() {
+    if (state.queueViewOpen) {
+        closeQueueView();
+    } else {
+        openQueueView();
+    }
+}
+
+function openQueueView() {
+    state.queueViewOpen = true;
+    state.queueSelectedIndex = 0;
+    elements.queueModal.classList.add('visible');
+    renderQueueView();
+}
+
+function closeQueueView() {
+    state.queueViewOpen = false;
+    elements.queueModal.classList.remove('visible');
+}
+
+function renderQueueView() {
+    if (state.queue.length === 0) {
+        elements.queueList.innerHTML = '<div class="queue-empty">Queue is empty</div>';
+        return;
+    }
+    
+    elements.queueList.innerHTML = state.queue.map((playlistIndex, queueIndex) => {
+        const track = state.playlist[playlistIndex];
+        const isSelected = queueIndex === state.queueSelectedIndex;
+        return `
+            <div class="queue-item ${isSelected ? 'selected' : ''}" data-index="${queueIndex}">
+                <span class="queue-number">${queueIndex + 1}.</span>
+                <span class="queue-name">${track.name}</span>
+                <span class="queue-duration">${formatDuration(track.duration)}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function handleQueueViewKeyDown(e) {
+    // Handle multi-key commands in queue view
+    if (state.pendingKey === 'd') {
+        if (e.key === 'd') {
+            removeFromQueue(state.queueSelectedIndex);
+        }
+        state.pendingKey = null;
+        return;
+    }
+    
+    if (state.pendingKey === 'g') {
+        if (e.key === 'g') {
+            state.queueSelectedIndex = 0;
+            renderQueueView();
+        }
+        state.pendingKey = null;
+        return;
+    }
+    
+    switch (e.key) {
+        case 'j':
+            if (state.queueSelectedIndex < state.queue.length - 1) {
+                state.queueSelectedIndex++;
+                renderQueueView();
+            }
+            break;
+        case 'k':
+            if (state.queueSelectedIndex > 0) {
+                state.queueSelectedIndex--;
+                renderQueueView();
+            }
+            break;
+        case 'g':
+            state.pendingKey = 'g';
+            break;
+        case 'G':
+            state.queueSelectedIndex = Math.max(0, state.queue.length - 1);
+            renderQueueView();
+            break;
+        case 'd':
+            state.pendingKey = 'd';
+            break;
+        case 'c':
+            clearQueue();
+            break;
+        case 'Enter':
+            // Play selected queue item immediately
+            if (state.queue.length > 0) {
+                const trackIndex = state.queue[state.queueSelectedIndex];
+                state.queue.splice(state.queueSelectedIndex, 1);
+                playTrack(trackIndex);
+                if (state.queueSelectedIndex >= state.queue.length) {
+                    state.queueSelectedIndex = Math.max(0, state.queue.length - 1);
+                }
+                updateQueueDisplay();
+            }
+            break;
+        case 'q':
+        case 'Escape':
+            closeQueueView();
+            break;
+    }
+}
+
+function removeFromQueue(index) {
+    if (index >= 0 && index < state.queue.length) {
+        const track = state.playlist[state.queue[index]];
+        state.queue.splice(index, 1);
+        if (state.queueSelectedIndex >= state.queue.length) {
+            state.queueSelectedIndex = Math.max(0, state.queue.length - 1);
+        }
+        updateQueueDisplay();
+        updateStatus(`Removed from queue: ${track.name}`);
+    }
 }
 
 // Folder Loading

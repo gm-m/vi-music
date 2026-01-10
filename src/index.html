@@ -144,6 +144,13 @@
                     <div class="shortcut"><kbd>S</kbd> Toggle shuffle</div>
                 </div>
                 <div class="help-section">
+                    <h3>Queue</h3>
+                    <div class="shortcut"><kbd>a</kbd> Add to queue</div>
+                    <div class="shortcut"><kbd>A</kbd> Add to queue (play if stopped)</div>
+                    <div class="shortcut"><kbd>q</kbd> Open queue view</div>
+                    <div class="shortcut"><kbd>dd</kbd> Remove from queue (in view)</div>
+                </div>
+                <div class="help-section">
                     <h3>General</h3>
                     <div class="shortcut"><kbd>o</kbd> Open folder</div>
                     <div class="shortcut"><kbd>/</kbd> Filter tracks</div>
@@ -155,6 +162,14 @@
                 </div>
             </div>
             <p class="help-footer">Press <kbd>Esc</kbd> or <kbd>?</kbd> to close</p>
+        </div>
+    </div>
+
+    <div class="queue-modal" id="queueModal">
+        <div class="queue-content">
+            <h2>Queue</h2>
+            <div class="queue-list" id="queueList"></div>
+            <p class="queue-footer"><kbd>j</kbd>/<kbd>k</kbd> navigate · <kbd>dd</kbd> remove · <kbd>Enter</kbd> play · <kbd>c</kbd> clear · <kbd>q</kbd> close</p>
         </div>
     </div>
 

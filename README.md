@@ -51,6 +51,23 @@ A minimal, VIM-style music player built with Tauri and vanilla JavaScript.
 | `r` | Toggle repeat mode (off → one → all) |
 | `S` (Shift+s) | Toggle shuffle mode |
 
+### Queue
+| Key | Action |
+|-----|--------|
+| `a` | Add selected track to queue |
+| `A` (Shift+a) | Add to queue (or play if stopped) |
+| `q` | Open queue view |
+
+#### Queue View Controls
+| Key | Action |
+|-----|--------|
+| `j` / `k` | Navigate up/down |
+| `gg` / `G` | Go to top/bottom |
+| `dd` | Remove selected from queue |
+| `Enter` | Play selected immediately |
+| `c` | Clear entire queue |
+| `q` / `Esc` | Close queue view |
+
 ### Filter/Search
 | Key | Action |
 |-----|--------|
