@@ -174,6 +174,7 @@ function handleKeyDown(e) {
             openFolder();
             break;
         case ':':
+            e.preventDefault();
             enterCommandMode();
             break;
         case '/':
@@ -215,10 +216,13 @@ function exitCommandMode() {
 }
 
 function handleCommandInput(e) {
+    e.stopPropagation();
     if (e.key === 'Enter') {
+        e.preventDefault();
         executeCommand(elements.commandInput.value);
         exitCommandMode();
     } else if (e.key === 'Escape') {
+        e.preventDefault();
         exitCommandMode();
     }
 }
@@ -644,12 +648,15 @@ function handleFilterInput(e) {
 }
 
 function handleFilterKeydown(e) {
+    e.stopPropagation();
     if (e.key === 'Enter') {
+        e.preventDefault();
         exitFilterMode();
         if (state.filteredPlaylist.length > 0) {
             jumpToNextMatch();
         }
     } else if (e.key === 'Escape') {
+        e.preventDefault();
         clearFilter();
         exitFilterMode();
     }
