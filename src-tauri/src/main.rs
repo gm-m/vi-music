@@ -69,13 +69,37 @@ impl AudioPlayer {
         let state_clone = playback_state.clone();
         
         thread::spawn(move || {
-            use rodio::{Decoder, OutputStream, Sink, Source};
+            use rodio::{Decoder, OutputStream, Sink};
             use std::fs::File;
-            use std::io::{BufReader, Seek, SeekFrom};
+            use std::io::BufReader;
             use std::time::Duration;
             
             let (_stream, stream_handle) = OutputStream::try_default().unwrap();
             let mut current_sink: Option<Sink> = None;
+            
+            fn play_file(path: &str, volume: f32, seek_secs: u64, stream_handle: &rodio::OutputStreamHandle) -> Option<Sink> {
+                use rodio::Source;
+                use std::path::Path;
+                
+                let ext = Path::new(path).extension()?.to_str()?.to_lowercase();
+                let file = File::open(path).ok()?;
+                let source = Decoder::new(BufReader::new(file)).ok()?;
+                let sink = Sink::try_new(stream_handle).ok()?;
+                sink.set_volume(volume);
+                
+                if seek_secs > 0 && ext == "flac" {
+                    // FLAC: use skip_duration (symphonia FLAC seeking is unreliable)
+                    let skipped = source.skip_duration(Duration::from_secs(seek_secs));
+                    sink.append(skipped);
+                } else {
+                    sink.append(source);
+                    if seek_secs > 0 {
+                        // MP3/WAV: use fast seek
+                        let _ = sink.try_seek(Duration::from_secs(seek_secs));
+                    }
+                }
+                Some(sink)
+            }
             
             loop {
                 if let Ok(cmd) = rx.recv() {
@@ -84,25 +108,15 @@ impl AudioPlayer {
                             if let Some(sink) = current_sink.take() {
                                 sink.stop();
                             }
-                            if let Ok(file) = File::open(&path) {
-                                if let Ok(source) = Decoder::new(BufReader::new(file)) {
-                                    let sink = Sink::try_new(&stream_handle).unwrap();
-                                    sink.set_volume(volume);
-                                    if skip_secs > 0 {
-                                        let skipped = source.skip_duration(Duration::from_secs(skip_secs));
-                                        sink.append(skipped);
-                                    } else {
-                                        sink.append(source);
-                                    }
-                                    current_sink = Some(sink);
-                                    
-                                    let mut state = state_clone.lock().unwrap();
-                                    state.start_time = Some(Instant::now());
-                                    state.start_position = skip_secs;
-                                    state.is_paused = false;
-                                    state.pause_time = None;
-                                    state.current_path = Some(path);
-                                }
+                            if let Some(sink) = play_file(&path, volume, skip_secs, &stream_handle) {
+                                current_sink = Some(sink);
+                                
+                                let mut state = state_clone.lock().unwrap();
+                                state.start_time = Some(Instant::now());
+                                state.start_position = skip_secs;
+                                state.is_paused = false;
+                                state.pause_time = None;
+                                state.current_path = Some(path);
                             }
                         }
                         AudioCommand::Pause => {
@@ -147,27 +161,44 @@ impl AudioPlayer {
                         AudioCommand::Seek(position) => {
                             let state = state_clone.lock().unwrap();
                             if let Some(ref path) = state.current_path.clone() {
-                                let volume = if let Some(ref sink) = current_sink {
-                                    sink.volume()
+                                let ext = std::path::Path::new(&path)
+                                    .extension()
+                                    .and_then(|e| e.to_str())
+                                    .map(|e| e.to_lowercase())
+                                    .unwrap_or_default();
+                                
+                                // For non-FLAC, try fast seek on current sink first
+                                let seek_duration = Duration::from_secs(position);
+                                let seek_success = if ext != "flac" {
+                                    if let Some(ref sink) = current_sink {
+                                        sink.try_seek(seek_duration).is_ok()
+                                    } else {
+                                        false
+                                    }
                                 } else {
-                                    1.0
+                                    false
                                 };
-                                drop(state);
                                 
-                                if let Some(sink) = current_sink.take() {
-                                    sink.stop();
-                                }
-                                
-                                if let Ok(file) = File::open(&path) {
-                                    if let Ok(source) = Decoder::new(BufReader::new(file)) {
-                                        let sink = Sink::try_new(&stream_handle).unwrap();
-                                        sink.set_volume(volume);
-                                        if position > 0 {
-                                            let skipped = source.skip_duration(Duration::from_secs(position));
-                                            sink.append(skipped);
-                                        } else {
-                                            sink.append(source);
-                                        }
+                                if seek_success {
+                                    // Fast seek worked, just update the state
+                                    drop(state);
+                                    let mut state = state_clone.lock().unwrap();
+                                    state.start_time = Some(Instant::now());
+                                    state.start_position = position;
+                                } else {
+                                    // Recreate sink with seek position
+                                    let volume = if let Some(ref sink) = current_sink {
+                                        sink.volume()
+                                    } else {
+                                        1.0
+                                    };
+                                    drop(state);
+                                    
+                                    if let Some(sink) = current_sink.take() {
+                                        sink.stop();
+                                    }
+                                    
+                                    if let Some(sink) = play_file(&path, volume, position, &stream_handle) {
                                         current_sink = Some(sink);
                                         
                                         let mut state = state_clone.lock().unwrap();

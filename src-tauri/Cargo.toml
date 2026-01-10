@@ -14,7 +14,7 @@ tauri-build = { version = "1.5", features = [] }
 tauri = { version = "1.5", features = ["dialog-open", "shell-open"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-rodio = { version = "0.17", features = ["mp3", "wav", "flac"] }
+rodio = { version = "0.19", features = ["symphonia-all"] }
 mp3-duration = "0.1"
 walkdir = "2.4"
 
