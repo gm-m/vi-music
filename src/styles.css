@@ -179,6 +179,49 @@ body {
     color: var(--bg-primary);
 }
 
+.progress-section {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 8px;
+}
+
+.time-elapsed,
+.time-total {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    min-width: 40px;
+    font-variant-numeric: tabular-nums;
+}
+
+.time-elapsed {
+    text-align: right;
+}
+
+.time-total {
+    text-align: left;
+}
+
+.progress-bar {
+    flex: 1;
+    height: 4px;
+    background: var(--bg-tertiary);
+    border-radius: 2px;
+    overflow: hidden;
+    cursor: pointer;
+}
+
+.progress-bar:hover {
+    height: 6px;
+}
+
+.progress-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--accent);
+    transition: width 0.1s linear;
+}
+
 .volume-section {
     display: flex;
     align-items: center;

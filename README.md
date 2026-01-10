@@ -37,6 +37,14 @@ A minimal, VIM-style music player built with Tauri and vanilla JavaScript.
 | `-` | Volume down |
 | `m` | Mute/Unmute |
 
+### Seeking
+| Key | Action |
+|-----|--------|
+| `l` | Seek forward 5 seconds |
+| `h` | Seek backward 5 seconds |
+| `L` (Shift+l) | Seek forward 30 seconds |
+| `H` (Shift+h) | Seek backward 30 seconds |
+
 ### Filter/Search
 | Key | Action |
 |-----|--------|

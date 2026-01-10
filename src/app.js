@@ -23,6 +23,9 @@ const state = {
     previousVolume: 1.0,
     mode: 'normal', // 'normal' | 'command' | 'filter'
     pendingKey: null, // for multi-key commands like 'gg'
+    elapsed: 0,
+    duration: null,
+    progressInterval: null,
 };
 
 // DOM Elements
@@ -47,6 +50,10 @@ const elements = {
     filterLine: document.getElementById('filterLine'),
     filterInput: document.getElementById('filterInput'),
     helpModal: document.getElementById('helpModal'),
+    progressBar: document.getElementById('progressBar'),
+    progressFill: document.getElementById('progressFill'),
+    timeElapsed: document.getElementById('timeElapsed'),
+    timeTotal: document.getElementById('timeTotal'),
 };
 
 // Initialize
@@ -54,6 +61,7 @@ async function init() {
     updateVolumeDisplay();
     setupEventListeners();
     await refreshStatus();
+    startProgressUpdater();
 }
 
 // Event Listeners
@@ -71,6 +79,17 @@ function setupEventListeners() {
     elements.filterInput.addEventListener('input', handleFilterInput);
     elements.filterInput.addEventListener('keydown', handleFilterKeydown);
     elements.filterInput.addEventListener('blur', exitFilterMode);
+    
+    elements.progressBar.addEventListener('click', handleProgressBarClick);
+}
+
+function handleProgressBarClick(e) {
+    if (!state.isPlaying || !state.duration) return;
+    
+    const rect = elements.progressBar.getBoundingClientRect();
+    const percent = (e.clientX - rect.left) / rect.width;
+    const position = Math.floor(percent * state.duration);
+    seekTo(position);
 }
 
 // Keyboard Handler
@@ -134,6 +153,20 @@ function handleKeyDown(e) {
             break;
         case 'm':
             toggleMute();
+            break;
+            
+        // Seeking
+        case 'l':
+            seekRelative(5);
+            break;
+        case 'h':
+            seekRelative(-5);
+            break;
+        case 'L':
+            seekRelative(30);
+            break;
+        case 'H':
+            seekRelative(-30);
             break;
             
         // General
@@ -281,9 +314,12 @@ async function playTrack(index) {
         state.playingIndex = index;
         state.isPlaying = true;
         state.isPaused = false;
+        state.duration = result.duration;
+        state.elapsed = 0;
         updateNowPlaying(result.name);
         renderPlaylist();
         updatePlayButton();
+        updateProgressDisplay();
     } catch (err) {
         console.error('Failed to play track:', err);
         updateStatus(`Error: ${err}`);
@@ -310,10 +346,12 @@ async function stop() {
         state.isPlaying = false;
         state.isPaused = false;
         state.playingIndex = -1;
+        state.duration = null;
         updateNowPlaying('No track selected');
         updateStatus('Stopped');
         renderPlaylist();
         updatePlayButton();
+        resetProgressDisplay();
     } catch (err) {
         console.error('Failed to stop:', err);
     }
@@ -380,6 +418,65 @@ function updateVolumeDisplay() {
     const percent = Math.round(state.volume * 100);
     elements.volumeFill.style.width = `${percent}%`;
     elements.volumeValue.textContent = `${percent}%`;
+}
+
+// Seeking
+async function seekRelative(delta) {
+    try {
+        await invoke('seek_relative', { delta });
+    } catch (err) {
+        // Ignore if not playing
+    }
+}
+
+async function seekTo(position) {
+    try {
+        await invoke('seek', { position });
+    } catch (err) {
+        // Ignore if not playing
+    }
+}
+
+// Progress Bar
+function startProgressUpdater() {
+    if (state.progressInterval) {
+        clearInterval(state.progressInterval);
+    }
+    state.progressInterval = setInterval(updateProgress, 500);
+}
+
+async function updateProgress() {
+    if (!state.isPlaying) {
+        return;
+    }
+    
+    try {
+        const status = await invoke('get_status');
+        state.elapsed = status.elapsed;
+        state.duration = status.duration;
+        updateProgressDisplay();
+    } catch (err) {
+        // Ignore errors
+    }
+}
+
+function updateProgressDisplay() {
+    elements.timeElapsed.textContent = formatDuration(state.elapsed);
+    elements.timeTotal.textContent = formatDuration(state.duration);
+    
+    if (state.duration && state.duration > 0) {
+        const percent = (state.elapsed / state.duration) * 100;
+        elements.progressFill.style.width = `${Math.min(percent, 100)}%`;
+    } else {
+        elements.progressFill.style.width = '0%';
+    }
+}
+
+function resetProgressDisplay() {
+    state.elapsed = 0;
+    elements.timeElapsed.textContent = '0:00';
+    elements.timeTotal.textContent = formatDuration(state.duration);
+    elements.progressFill.style.width = '0%';
 }
 
 // Folder Loading
