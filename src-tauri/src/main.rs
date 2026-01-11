@@ -75,6 +75,7 @@ enum AudioCommand {
     Stop,
     SetVolume(f32),
     Seek(u64),
+    SetSpeed(f32),
 }
 
 struct PlaybackState {
@@ -85,6 +86,7 @@ struct PlaybackState {
     current_path: Option<String>,
     duration: Option<u64>,
     is_finished: bool,
+    speed: f32,
 }
 
 impl PlaybackState {
@@ -97,6 +99,7 @@ impl PlaybackState {
             current_path: None,
             duration: None,
             is_finished: false,
+            speed: 1.0,
         }
     }
     
@@ -351,6 +354,13 @@ impl AudioPlayer {
                                 sink.set_volume(vol);
                             }
                         }
+                        AudioCommand::SetSpeed(speed) => {
+                            if let Some(ref sink) = current_sink {
+                                sink.set_speed(speed);
+                            }
+                            let mut state = state_clone.lock().unwrap();
+                            state.speed = speed;
+                        }
                         AudioCommand::Seek(position) => {
                             let state = state_clone.lock().unwrap();
                             if let Some(ref path) = state.current_path.clone() {
@@ -425,6 +435,10 @@ impl AudioPlayer {
     
     fn is_finished(&self) -> bool {
         self.playback_state.lock().unwrap().is_finished
+    }
+    
+    fn get_speed(&self) -> f32 {
+        self.playback_state.lock().unwrap().speed
     }
 }
 
@@ -506,6 +520,7 @@ struct PlayerStatus {
     current_track: Option<String>,
     current_index: usize,
     volume: f32,
+    speed: f32,
     playlist_length: usize,
     elapsed: u64,
     duration: Option<u64>,
@@ -780,6 +795,13 @@ fn set_volume(volume: f32, state: State<AppState>) -> Result<f32, String> {
 }
 
 #[tauri::command]
+fn set_speed(speed: f32, state: State<AppState>) -> Result<f32, String> {
+    let clamped = speed.clamp(0.25, 3.0);
+    state.player.send(AudioCommand::SetSpeed(clamped));
+    Ok(clamped)
+}
+
+#[tauri::command]
 fn get_status(state: State<AppState>) -> PlayerStatus {
     PlayerStatus {
         is_playing: *state.is_playing.lock().unwrap(),
@@ -788,6 +810,7 @@ fn get_status(state: State<AppState>) -> PlayerStatus {
         current_track: state.current_track.lock().unwrap().clone(),
         current_index: *state.current_index.lock().unwrap(),
         volume: *state.volume.lock().unwrap(),
+        speed: state.player.get_speed(),
         playlist_length: state.playlist.lock().unwrap().len(),
         elapsed: state.player.get_elapsed(),
         duration: *state.current_duration.lock().unwrap(),
@@ -1017,6 +1040,7 @@ fn main() {
             next_track,
             prev_track,
             set_volume,
+            set_speed,
             get_status,
             seek,
             seek_relative,

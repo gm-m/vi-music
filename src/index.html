@@ -10,7 +10,10 @@
     <div class="container">
         <header class="header">
             <h1 class="logo">VI Music</h1>
-            <div class="mode-indicator" id="modeIndicator">NORMAL</div>
+            <div class="header-indicators">
+                <span class="speed-indicator" id="speedIndicator"></span>
+                <div class="mode-indicator" id="modeIndicator">NORMAL</div>
+            </div>
         </header>
 
         <main class="main">
@@ -148,6 +151,12 @@
                     <div class="shortcut"><kbd>r</kbd> Toggle repeat (off/one/all)</div>
                     <div class="shortcut"><kbd>S</kbd> Toggle shuffle</div>
                     <div class="shortcut"><kbd>v</kbd> Visual mode (multi-select)</div>
+                </div>
+                <div class="help-section">
+                    <h3>Speed</h3>
+                    <div class="shortcut"><kbd>]</kbd> Speed up (+0.25x)</div>
+                    <div class="shortcut"><kbd>[</kbd> Speed down (-0.25x)</div>
+                    <div class="shortcut"><kbd>\</kbd> Reset speed (1.0x)</div>
                 </div>
                 <div class="help-section">
                     <h3>Queue</h3>

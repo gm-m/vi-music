@@ -51,6 +51,13 @@ A minimal, VIM-style music player built with Tauri and vanilla JavaScript.
 | `r` | Toggle repeat mode (off → one → all) |
 | `S` (Shift+s) | Toggle shuffle mode |
 
+### Speed
+| Key | Action |
+|-----|--------|
+| `]` | Increase speed (+0.25x) |
+| `[` | Decrease speed (-0.25x) |
+| `\` | Reset speed to 1.0x |
+
 ### Queue
 | Key | Action |
 |-----|--------|
@@ -89,11 +96,14 @@ A minimal, VIM-style music player built with Tauri and vanilla JavaScript.
 | `Esc` | Close modals / Exit mode |
 
 ### Folder View
-In folder view, you can browse the folder structure:
+In folder view, you can browse the folder structure with a breadcrumb showing your current path:
 - **`j`/`k`** - Navigate items
 - **`Enter`** - Open folder or play track
 - **`Backspace`** - Go to parent folder
 - **`Tab`** - Switch back to list view
+- **`A`** - Load all tracks from current folder as playlist
+- **`v`** - Enter visual mode for multi-select
+- **`p`** - Add selected file(s) to playlist
 
 ### Visual Mode
 | Key | Action |

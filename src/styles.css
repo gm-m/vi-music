@@ -64,6 +64,24 @@ body {
     background: var(--warning);
 }
 
+.header-indicators {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.speed-indicator {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    display: none;
+}
+
+.speed-indicator.active {
+    display: inline;
+    color: var(--accent);
+}
+
 .main {
     flex: 1;
     display: flex;

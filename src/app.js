@@ -21,6 +21,7 @@ const state = {
     isPaused: false,
     volume: 1.0,
     previousVolume: 1.0,
+    speed: 1.0,
     mode: 'normal', // 'normal' | 'command' | 'filter' | 'visual'
     pendingKey: null, // for multi-key commands like 'gg'
     visualStart: -1, // Start index for visual selection
@@ -79,6 +80,7 @@ const elements = {
     timeTotal: document.getElementById('timeTotal'),
     queueModal: document.getElementById('queueModal'),
     queueList: document.getElementById('queueList'),
+    speedIndicator: document.getElementById('speedIndicator'),
 };
 
 // Initialize
@@ -244,6 +246,17 @@ function handleKeyDown(e) {
             break;
         case 'S':
             toggleShuffle();
+            break;
+        
+        // Speed
+        case ']':
+            changeSpeed(0.25);
+            break;
+        case '[':
+            changeSpeed(-0.25);
+            break;
+        case '\\':
+            resetSpeed();
             break;
         
         // Queue
@@ -1023,6 +1036,32 @@ function updateVolumeDisplay() {
     elements.volumeValue.textContent = `${percent}%`;
 }
 
+// Speed Control
+async function changeSpeed(delta) {
+    const newSpeed = Math.max(0.25, Math.min(3.0, state.speed + delta));
+    await setSpeed(newSpeed);
+}
+
+async function resetSpeed() {
+    await setSpeed(1.0);
+}
+
+async function setSpeed(speed) {
+    try {
+        const result = await invoke('set_speed', { speed });
+        state.speed = result;
+        updateSpeedDisplay();
+    } catch (err) {
+        console.error('Failed to set speed:', err);
+    }
+}
+
+function updateSpeedDisplay() {
+    const speedText = state.speed === 1.0 ? '' : `${state.speed.toFixed(2)}x`;
+    elements.speedIndicator.textContent = speedText;
+    elements.speedIndicator.classList.toggle('active', state.speed !== 1.0);
+}
+
 // Seeking
 async function seekRelative(delta) {
     try {
@@ -1057,6 +1096,12 @@ async function updateProgress() {
         const status = await invoke('get_status');
         state.elapsed = status.elapsed;
         state.duration = status.duration;
+        
+        // Sync speed from backend
+        if (status.speed !== state.speed) {
+            state.speed = status.speed;
+            updateSpeedDisplay();
+        }
         
         // Check if track finished
         if (status.is_finished) {
