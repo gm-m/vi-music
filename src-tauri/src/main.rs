@@ -26,8 +26,24 @@ struct AppConfig {
     default_folder: Option<String>,
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+struct SavedPlaylist {
+    name: String,
+    tracks: Vec<String>, // File paths
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+struct PlaylistInfo {
+    name: String,
+    track_count: usize,
+}
+
 fn get_config_path() -> Option<PathBuf> {
     dirs::config_dir().map(|p| p.join("vi-music").join("config.json"))
+}
+
+fn get_playlists_dir() -> Option<PathBuf> {
+    dirs::config_dir().map(|p| p.join("vi-music").join("playlists"))
 }
 
 fn load_config() -> AppConfig {
@@ -829,6 +845,166 @@ fn clear_default_folder() -> Result<(), String> {
     save_config(&config)
 }
 
+#[tauri::command]
+fn save_playlist(name: String, state: State<AppState>) -> Result<(), String> {
+    let playlists_dir = get_playlists_dir().ok_or("Could not determine playlists directory")?;
+    fs::create_dir_all(&playlists_dir).map_err(|e| e.to_string())?;
+    
+    let playlist = state.playlist.lock().unwrap();
+    let saved = SavedPlaylist {
+        name: name.clone(),
+        tracks: playlist.clone(),
+    };
+    
+    let filename = format!("{}.json", sanitize_filename(&name));
+    let path = playlists_dir.join(&filename);
+    let content = serde_json::to_string_pretty(&saved).map_err(|e| e.to_string())?;
+    fs::write(&path, content).map_err(|e| e.to_string())?;
+    
+    Ok(())
+}
+
+#[tauri::command]
+fn load_playlist(name: String, state: State<AppState>) -> Result<Vec<TrackInfo>, String> {
+    let playlists_dir = get_playlists_dir().ok_or("Could not determine playlists directory")?;
+    let filename = format!("{}.json", sanitize_filename(&name));
+    let path = playlists_dir.join(&filename);
+    
+    let content = fs::read_to_string(&path).map_err(|_| "Playlist not found")?;
+    let saved: SavedPlaylist = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+    
+    // Filter out tracks that no longer exist
+    let valid_tracks: Vec<String> = saved.tracks
+        .into_iter()
+        .filter(|p| PathBuf::from(p).exists())
+        .collect();
+    
+    let track_infos: Vec<TrackInfo> = valid_tracks
+        .iter()
+        .enumerate()
+        .map(|(i, p)| {
+            let name = PathBuf::from(p)
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let duration = get_audio_duration(p);
+            TrackInfo {
+                path: p.clone(),
+                name,
+                index: i,
+                duration,
+            }
+        })
+        .collect();
+    
+    *state.playlist.lock().unwrap() = valid_tracks;
+    *state.current_index.lock().unwrap() = 0;
+    
+    Ok(track_infos)
+}
+
+#[tauri::command]
+fn list_playlists() -> Result<Vec<PlaylistInfo>, String> {
+    let playlists_dir = get_playlists_dir().ok_or("Could not determine playlists directory")?;
+    
+    if !playlists_dir.exists() {
+        return Ok(Vec::new());
+    }
+    
+    let mut playlists = Vec::new();
+    
+    if let Ok(entries) = fs::read_dir(&playlists_dir) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.extension().map(|e| e == "json").unwrap_or(false) {
+                if let Ok(content) = fs::read_to_string(&path) {
+                    if let Ok(saved) = serde_json::from_str::<SavedPlaylist>(&content) {
+                        playlists.push(PlaylistInfo {
+                            name: saved.name,
+                            track_count: saved.tracks.len(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+    
+    playlists.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    Ok(playlists)
+}
+
+#[tauri::command]
+fn delete_playlist(name: String) -> Result<(), String> {
+    let playlists_dir = get_playlists_dir().ok_or("Could not determine playlists directory")?;
+    let filename = format!("{}.json", sanitize_filename(&name));
+    let path = playlists_dir.join(&filename);
+    
+    fs::remove_file(&path).map_err(|_| "Failed to delete playlist")?;
+    Ok(())
+}
+
+#[tauri::command]
+fn create_playlist(name: String) -> Result<(), String> {
+    let playlists_dir = get_playlists_dir().ok_or("Could not determine playlists directory")?;
+    fs::create_dir_all(&playlists_dir).map_err(|e| e.to_string())?;
+    
+    let filename = format!("{}.json", sanitize_filename(&name));
+    let path = playlists_dir.join(&filename);
+    
+    if path.exists() {
+        return Err("Playlist already exists".to_string());
+    }
+    
+    let saved = SavedPlaylist {
+        name,
+        tracks: Vec::new(),
+    };
+    
+    let content = serde_json::to_string_pretty(&saved).map_err(|e| e.to_string())?;
+    fs::write(&path, content).map_err(|e| e.to_string())?;
+    
+    Ok(())
+}
+
+#[tauri::command]
+fn add_tracks_to_playlist(name: String, tracks: Vec<String>) -> Result<usize, String> {
+    let playlists_dir = get_playlists_dir().ok_or("Could not determine playlists directory")?;
+    let filename = format!("{}.json", sanitize_filename(&name));
+    let path = playlists_dir.join(&filename);
+    
+    let mut saved: SavedPlaylist = if path.exists() {
+        let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        serde_json::from_str(&content).map_err(|e| e.to_string())?
+    } else {
+        // Create new playlist if it doesn't exist
+        fs::create_dir_all(&playlists_dir).map_err(|e| e.to_string())?;
+        SavedPlaylist {
+            name: name.clone(),
+            tracks: Vec::new(),
+        }
+    };
+    
+    // Add tracks that aren't already in the playlist
+    let mut added = 0;
+    for track in tracks {
+        if !saved.tracks.contains(&track) {
+            saved.tracks.push(track);
+            added += 1;
+        }
+    }
+    
+    let content = serde_json::to_string_pretty(&saved).map_err(|e| e.to_string())?;
+    fs::write(&path, content).map_err(|e| e.to_string())?;
+    
+    Ok(added)
+}
+
+fn sanitize_filename(name: &str) -> String {
+    name.chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' { c } else { '_' })
+        .collect()
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(AppState::new())
@@ -847,6 +1023,12 @@ fn main() {
             get_default_folder,
             set_default_folder,
             clear_default_folder,
+            save_playlist,
+            load_playlist,
+            list_playlists,
+            delete_playlist,
+            create_playlist,
+            add_tracks_to_playlist,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

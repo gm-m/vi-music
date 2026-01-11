@@ -101,7 +101,13 @@ In folder view, you can browse the folder structure:
 | `j` / `k` | Extend selection up/down |
 | `gg` / `G` | Extend to top/bottom |
 | `a` | Add selection to queue |
+| `p` | Add selection to playlist |
 | `v` / `Esc` | Exit visual mode |
+
+### Playlists
+| Key | Action |
+|-----|--------|
+| `p` | Add current track to playlist |
 
 ## Command Mode
 
@@ -115,6 +121,10 @@ Press `:` to enter command mode. Available commands:
 - `:vol [0-100]` - Set volume
 - `:setdefault` or `:sd` - Set current folder as default (auto-loads on startup)
 - `:cleardefault` or `:cd` - Clear default folder
+- `:save <name>` or `:w <name>` - Save current playlist
+- `:load <name>` or `:e <name>` - Load a saved playlist
+- `:playlists` or `:pl` - Open playlist manager
+- `:delplaylist <name>` or `:dp <name>` - Delete a playlist
 - `:help` or `:h` - Show help
 - `:quit` or `:q` - Quit application
 

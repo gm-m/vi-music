@@ -160,10 +160,16 @@
                     <h3>General</h3>
                     <div class="shortcut"><kbd>o</kbd> Open folder</div>
                     <div class="shortcut"><kbd>Tab</kbd> Toggle list/folder view</div>
-                    <div class="shortcut"><kbd>Backspace</kbd> Go up (folder view)</div>
                     <div class="shortcut"><kbd>/</kbd> Filter tracks</div>
                     <div class="shortcut"><kbd>:</kbd> Command mode</div>
                     <div class="shortcut"><kbd>?</kbd> Toggle help</div>
+                </div>
+                <div class="help-section">
+                    <h3>Playlists</h3>
+                    <div class="shortcut"><kbd>p</kbd> Add track to playlist</div>
+                    <div class="shortcut"><kbd>:save name</kbd> Save current playlist</div>
+                    <div class="shortcut"><kbd>:load name</kbd> Load playlist</div>
+                    <div class="shortcut"><kbd>:playlists</kbd> Browse playlists</div>
                 </div>
             </div>
             <p class="help-footer">Press <kbd>Esc</kbd> or <kbd>?</kbd> to close</p>
@@ -175,6 +181,23 @@
             <h2>Queue</h2>
             <div class="queue-list" id="queueList"></div>
             <p class="queue-footer"><kbd>j</kbd>/<kbd>k</kbd> navigate · <kbd>dd</kbd> remove · <kbd>Enter</kbd> play · <kbd>c</kbd> clear · <kbd>q</kbd> close</p>
+        </div>
+    </div>
+
+    <div class="playlist-manager-modal" id="playlistManagerModal">
+        <div class="playlist-manager-content">
+            <h2>Saved Playlists</h2>
+            <div class="playlist-manager-list" id="playlistManagerList"></div>
+            <p class="playlist-manager-footer"><kbd>j</kbd>/<kbd>k</kbd> navigate · <kbd>Enter</kbd> load · <kbd>dd</kbd> delete · <kbd>q</kbd> close</p>
+        </div>
+    </div>
+
+    <div class="add-to-playlist-modal" id="addToPlaylistModal">
+        <div class="add-to-playlist-content">
+            <h2>Add to Playlist</h2>
+            <p class="add-to-playlist-count" id="addToPlaylistCount">0 tracks selected</p>
+            <div class="add-to-playlist-list" id="addToPlaylistList"></div>
+            <p class="add-to-playlist-footer"><kbd>j</kbd>/<kbd>k</kbd> navigate · <kbd>Enter</kbd> add · <kbd>q</kbd> close</p>
         </div>
     </div>
 

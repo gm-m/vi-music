@@ -708,9 +708,195 @@ body {
     padding-top: 12px;
 }
 
-.queue-footer kbd {
+/* Playlist Manager Modal */
+.playlist-manager-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.playlist-manager-modal.visible {
+    display: flex;
+}
+
+.playlist-manager-content {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    width: 90%;
+    max-width: 500px;
+    max-height: 70vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.playlist-manager-content h2 {
+    margin-bottom: 16px;
+    font-size: 1.1rem;
+    color: var(--accent);
+}
+
+.playlist-manager-list {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 100px;
+}
+
+.playlist-manager-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-bottom: 4px;
+    cursor: pointer;
+}
+
+.playlist-manager-item.selected {
+    background: var(--selection);
+}
+
+.playlist-manager-item:hover:not(.selected) {
+    background: var(--bg-tertiary);
+}
+
+.playlist-manager-name {
+    flex: 1;
+    font-size: 0.9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.playlist-manager-count {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    margin-left: 12px;
+}
+
+.playlist-manager-footer {
+    text-align: center;
+    margin-top: 16px;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+}
+
+.playlist-manager-footer kbd,
+.queue-footer kbd,
+.add-to-playlist-footer kbd {
     background: var(--bg-tertiary);
     padding: 2px 6px;
     border-radius: 3px;
     font-size: 0.7rem;
+}
+
+/* Add to Playlist Modal */
+.add-to-playlist-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1001;
+}
+
+.add-to-playlist-modal.visible {
+    display: flex;
+}
+
+.add-to-playlist-content {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    width: 90%;
+    max-width: 400px;
+    max-height: 60vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.add-to-playlist-content h2 {
+    margin-bottom: 8px;
+    font-size: 1.1rem;
+    color: var(--accent);
+}
+
+.add-to-playlist-count {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+}
+
+.add-to-playlist-list {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 80px;
+}
+
+.add-to-playlist-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    border-radius: 6px;
+    margin-bottom: 4px;
+    cursor: pointer;
+    gap: 10px;
+}
+
+.add-to-playlist-item.selected {
+    background: var(--selection);
+}
+
+.add-to-playlist-item:hover:not(.selected) {
+    background: var(--bg-tertiary);
+}
+
+.add-to-playlist-item.new-playlist {
+    color: var(--success);
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 8px;
+    padding-bottom: 12px;
+}
+
+.add-to-playlist-icon {
+    font-size: 1rem;
+    width: 20px;
+    text-align: center;
+}
+
+.add-to-playlist-name {
+    flex: 1;
+    font-size: 0.9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.add-to-playlist-count {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+.add-to-playlist-footer {
+    text-align: center;
+    margin-top: 16px;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
 }
