@@ -62,6 +62,7 @@ A minimal, VIM-style music player built with Tauri and vanilla JavaScript.
 | Key | Action |
 |-----|--------|
 | `j` / `k` | Navigate up/down |
+| `J` / `K` | Move item down/up (reorder) |
 | `gg` / `G` | Go to top/bottom |
 | `dd` | Remove selected from queue |
 | `Enter` | Play selected immediately |

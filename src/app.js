@@ -457,6 +457,15 @@ async function savePlaylist(name) {
     }
     
     try {
+        // Check if playlist already exists
+        const playlists = await invoke('list_playlists');
+        const exists = playlists.some(p => p.name.toLowerCase() === name.toLowerCase());
+        
+        if (exists && !confirm(`Playlist "${name}" already exists. Overwrite?`)) {
+            updateStatus('Save cancelled');
+            return;
+        }
+        
         await invoke('save_playlist', { name });
         updateStatus(`Playlist "${name}" saved (${state.playlist.length} tracks)`);
     } catch (err) {
@@ -578,7 +587,9 @@ function loadSelectedPlaylist() {
 function deleteSelectedPlaylist() {
     if (state.savedPlaylists.length === 0) return;
     const playlist = state.savedPlaylists[state.playlistManagerIndex];
-    deletePlaylist(playlist.name);
+    if (confirm(`Delete playlist "${playlist.name}"?`)) {
+        deletePlaylist(playlist.name);
+    }
 }
 
 function handlePlaylistManagerKeyDown(e) {
@@ -1196,6 +1207,10 @@ function playPrevShuffle() {
 
 // Queue
 function addToQueue() {
+    if (state.viewMode === 'folder') {
+        updateStatus('Queue only works in list view. Use "A" to load folder.');
+        return;
+    }
     if (state.playlist.length === 0) return;
     
     const track = state.playlist[state.selectedIndex];
@@ -1205,6 +1220,11 @@ function addToQueue() {
 }
 
 function addToQueueAndPlay() {
+    if (state.viewMode === 'folder') {
+        // In folder view, A loads all tracks from current folder
+        loadCurrentFolderAsPlaylist();
+        return;
+    }
     if (state.playlist.length === 0) return;
     
     // If nothing is playing, just play the selected track
@@ -1215,6 +1235,34 @@ function addToQueueAndPlay() {
     
     // Add to queue
     addToQueue();
+}
+
+async function loadCurrentFolderAsPlaylist() {
+    if (state.folderContents.length === 0) return;
+    
+    // Get all audio files from current folder
+    const audioFiles = state.folderContents.filter(item => item.item_type === 'file');
+    
+    if (audioFiles.length === 0) {
+        updateStatus('No audio files in this folder');
+        return;
+    }
+    
+    try {
+        updateStatus('Loading folder...');
+        const tracks = await invoke('load_folder', { path: state.currentFolder });
+        state.playlist = tracks;
+        state.selectedIndex = 0;
+        state.playingIndex = -1;
+        state.queue = [];
+        state.viewMode = 'list';
+        renderPlaylist();
+        updateViewModeIndicator();
+        updateStatus(`Loaded ${tracks.length} tracks from folder`);
+    } catch (err) {
+        console.error('Failed to load folder:', err);
+        updateStatus(`Error: ${err}`);
+    }
 }
 
 function clearQueue() {
@@ -1443,6 +1491,28 @@ function handleQueueViewKeyDown(e) {
                 renderQueueView();
             }
             break;
+        case 'J':
+            // Move selected item down
+            if (state.queueSelectedIndex < state.queue.length - 1) {
+                const temp = state.queue[state.queueSelectedIndex];
+                state.queue[state.queueSelectedIndex] = state.queue[state.queueSelectedIndex + 1];
+                state.queue[state.queueSelectedIndex + 1] = temp;
+                state.queueSelectedIndex++;
+                renderQueueView();
+                updateQueueDisplay();
+            }
+            break;
+        case 'K':
+            // Move selected item up
+            if (state.queueSelectedIndex > 0) {
+                const temp = state.queue[state.queueSelectedIndex];
+                state.queue[state.queueSelectedIndex] = state.queue[state.queueSelectedIndex - 1];
+                state.queue[state.queueSelectedIndex - 1] = temp;
+                state.queueSelectedIndex--;
+                renderQueueView();
+                updateQueueDisplay();
+            }
+            break;
         case 'g':
             state.pendingKey = 'g';
             break;
@@ -1569,6 +1639,32 @@ function getFolderName(path) {
     return path.split(/[/\\]/).pop() || path;
 }
 
+function buildBreadcrumb(currentPath, rootPath) {
+    if (!currentPath || !rootPath) return '';
+    
+    // Normalize paths
+    const normCurrent = currentPath.replace(/\\/g, '/');
+    const normRoot = rootPath.replace(/\\/g, '/');
+    
+    // Get relative path from root
+    let relativePath = normCurrent;
+    if (normCurrent.startsWith(normRoot)) {
+        relativePath = normCurrent.slice(normRoot.length);
+        if (relativePath.startsWith('/')) relativePath = relativePath.slice(1);
+    }
+    
+    const rootName = getFolderName(rootPath);
+    const parts = relativePath ? relativePath.split('/').filter(Boolean) : [];
+    
+    // Build breadcrumb parts
+    const crumbs = [`<span class="breadcrumb-root">${escapeHtml(rootName)}</span>`];
+    parts.forEach(part => {
+        crumbs.push(`<span class="breadcrumb-separator">/</span><span class="breadcrumb-part">${escapeHtml(part)}</span>`);
+    });
+    
+    return crumbs.join('');
+}
+
 function renderFolderView() {
     if (state.folderContents.length === 0) {
         elements.playlist.innerHTML = `
@@ -1585,9 +1681,13 @@ function renderFolderView() {
     const matchedIndices = new Set(state.filteredFolderContents.map(({ index }) => index));
     const visualSelection = state.mode === 'visual' ? new Set(getVisualSelection()) : new Set();
     
+    // Build breadcrumb
+    const breadcrumb = buildBreadcrumb(state.currentFolder, state.rootFolder);
     elements.playlistCount.textContent = `${folderName} (${state.folderContents.length} items)`;
     
-    elements.playlist.innerHTML = state.folderContents.map((item, index) => {
+    const breadcrumbHtml = `<div class="folder-breadcrumb">${breadcrumb}</div>`;
+    
+    const itemsHtml = state.folderContents.map((item, index) => {
         const isSelected = index === state.folderSelectedIndex;
         const isVisualSelected = visualSelection.has(index);
         const isMatch = state.filterText && matchedIndices.has(index);
@@ -1613,6 +1713,8 @@ function renderFolderView() {
             </div>
         `;
     }).join('');
+    
+    elements.playlist.innerHTML = breadcrumbHtml + itemsHtml;
     
     // Add click handlers
     elements.playlist.querySelectorAll('.track-item').forEach(item => {

@@ -389,6 +389,33 @@ body {
     background: var(--selection);
 }
 
+/* Folder Breadcrumb */
+.folder-breadcrumb {
+    padding: 8px 12px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 2px;
+}
+
+.breadcrumb-root {
+    color: var(--accent);
+    font-weight: 500;
+}
+
+.breadcrumb-separator {
+    color: var(--text-muted);
+    margin: 0 2px;
+}
+
+.breadcrumb-part {
+    color: var(--text-secondary);
+}
+
 .track-item.folder-item {
     color: var(--warning);
 }
