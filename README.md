@@ -136,6 +136,8 @@ Press `:` to enter command mode. Available commands:
 - `:load <name>` or `:e <name>` - Load a saved playlist
 - `:playlists` or `:pl` - Open playlist manager
 - `:delplaylist <name>` or `:dp <name>` - Delete a playlist
+- `:sleep <minutes>` - Set sleep timer (0 to cancel)
+- `:sleep` - Show remaining sleep timer
 - `:help` or `:h` - Show help
 - `:quit` or `:q` - Quit application
 

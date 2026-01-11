@@ -50,6 +50,9 @@ const state = {
     addToPlaylistOpen: false,
     addToPlaylistIndex: 0,
     addToPlaylistTracks: [], // Track paths to add
+    // Sleep timer
+    sleepTimerEnd: null, // Timestamp when playback should stop
+    sleepTimerInterval: null,
 };
 
 // DOM Elements
@@ -81,6 +84,7 @@ const elements = {
     queueModal: document.getElementById('queueModal'),
     queueList: document.getElementById('queueList'),
     speedIndicator: document.getElementById('speedIndicator'),
+    sleepTimerIndicator: document.getElementById('sleepTimerIndicator'),
 };
 
 // Initialize
@@ -430,6 +434,24 @@ function executeCommand(cmd) {
                 deletePlaylist(parts.slice(1).join(' '));
             } else {
                 updateStatus('Usage: :delplaylist <playlist name>');
+            }
+            break;
+        case 'sleep':
+            if (parts[1]) {
+                const minutes = parseInt(parts[1]);
+                if (!isNaN(minutes) && minutes >= 0) {
+                    setSleepTimer(minutes);
+                } else {
+                    updateStatus('Usage: :sleep <minutes> (0 to cancel)');
+                }
+            } else {
+                // Show current timer status or clear it
+                if (state.sleepTimerEnd) {
+                    const remaining = Math.ceil((state.sleepTimerEnd - Date.now()) / 60000);
+                    updateStatus(`Sleep timer: ${remaining} minute${remaining !== 1 ? 's' : ''} remaining`);
+                } else {
+                    updateStatus('No sleep timer set. Usage: :sleep <minutes>');
+                }
             }
             break;
     }
@@ -1077,6 +1099,61 @@ async function seekTo(position) {
     } catch (err) {
         // Ignore if not playing
     }
+}
+
+// Sleep Timer
+function setSleepTimer(minutes) {
+    clearSleepTimer();
+    
+    if (minutes <= 0) {
+        updateStatus('Sleep timer cleared');
+        return;
+    }
+    
+    state.sleepTimerEnd = Date.now() + (minutes * 60 * 1000);
+    
+    // Update display every second
+    state.sleepTimerInterval = setInterval(() => {
+        const remaining = state.sleepTimerEnd - Date.now();
+        
+        if (remaining <= 0) {
+            // Timer expired - stop playback
+            clearSleepTimer();
+            stop();
+            updateStatus('Sleep timer: Playback stopped');
+        } else {
+            updateSleepTimerDisplay(remaining);
+        }
+    }, 1000);
+    
+    updateSleepTimerDisplay(minutes * 60 * 1000);
+    updateStatus(`Sleep timer set for ${minutes} minute${minutes > 1 ? 's' : ''}`);
+}
+
+function clearSleepTimer() {
+    if (state.sleepTimerInterval) {
+        clearInterval(state.sleepTimerInterval);
+        state.sleepTimerInterval = null;
+    }
+    state.sleepTimerEnd = null;
+    updateSleepTimerDisplay(0);
+}
+
+function updateSleepTimerDisplay(remainingMs) {
+    if (!elements.sleepTimerIndicator) return;
+    
+    if (remainingMs <= 0) {
+        elements.sleepTimerIndicator.textContent = '';
+        elements.sleepTimerIndicator.classList.remove('active');
+        return;
+    }
+    
+    const totalSeconds = Math.ceil(remainingMs / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    
+    elements.sleepTimerIndicator.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    elements.sleepTimerIndicator.classList.add('active');
 }
 
 // Progress Bar

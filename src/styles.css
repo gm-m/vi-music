@@ -70,7 +70,8 @@ body {
     gap: 12px;
 }
 
-.speed-indicator {
+.speed-indicator,
+.sleep-timer-indicator {
     font-size: 0.75rem;
     font-weight: 600;
     color: var(--text-muted);
@@ -80,6 +81,11 @@ body {
 .speed-indicator.active {
     display: inline;
     color: var(--accent);
+}
+
+.sleep-timer-indicator.active {
+    display: inline;
+    color: var(--warning);
 }
 
 .main {
