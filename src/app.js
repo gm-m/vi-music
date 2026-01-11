@@ -263,7 +263,7 @@ function handleKeyDown(e) {
             enterVisualMode();
             break;
         case 'p':
-            showAddToPlaylistPicker([state.selectedIndex]);
+            showAddToPlaylistPicker(getSelectedTrackPaths());
             break;
             
         // General
@@ -630,15 +630,41 @@ function handlePlaylistManagerKeyDown(e) {
     }
 }
 
+// Get selected track paths based on current view mode
+function getSelectedTrackPaths(indices = null) {
+    if (state.viewMode === 'folder') {
+        // In folder view, get paths from folder contents
+        if (indices) {
+            return indices
+                .map(i => state.folderContents[i])
+                .filter(item => item && item.item_type === 'file')
+                .map(item => item.path);
+        }
+        // Single selection
+        const item = state.folderContents[state.folderSelectedIndex];
+        if (item && item.item_type === 'file') {
+            return [item.path];
+        }
+        return [];
+    } else {
+        // In list view, get paths from playlist
+        if (indices) {
+            return indices.map(i => state.playlist[i]?.path).filter(Boolean);
+        }
+        const track = state.playlist[state.selectedIndex];
+        return track ? [track.path] : [];
+    }
+}
+
 // Add to Playlist Picker
-async function showAddToPlaylistPicker(trackIndices) {
-    if (state.playlist.length === 0 || trackIndices.length === 0) {
+async function showAddToPlaylistPicker(trackPaths) {
+    if (!trackPaths || trackPaths.length === 0) {
         updateStatus('No tracks selected');
         return;
     }
     
-    // Get track paths from indices
-    state.addToPlaylistTracks = trackIndices.map(i => state.playlist[i]?.path).filter(Boolean);
+    // Filter out any invalid paths
+    state.addToPlaylistTracks = trackPaths.filter(Boolean);
     
     if (state.addToPlaylistTracks.length === 0) {
         updateStatus('No valid tracks selected');
@@ -838,6 +864,13 @@ function selectTrack(index) {
 
 function scrollToSelected() {
     const selected = elements.playlist.querySelector('.track-item.selected');
+    if (selected) {
+        selected.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+}
+
+function scrollToFolderSelected() {
+    const selected = elements.playlist.querySelector('.folder-item.selected');
     if (selected) {
         selected.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
@@ -1209,25 +1242,37 @@ function updateQueueDisplay() {
 
 // Visual Mode
 function enterVisualMode() {
-    if (state.playlist.length === 0) return;
-    
-    state.mode = 'visual';
-    state.visualStart = state.selectedIndex;
-    updateModeIndicators();
-    renderPlaylist();
+    if (state.viewMode === 'folder') {
+        if (state.folderContents.length === 0) return;
+        state.mode = 'visual';
+        state.visualStart = state.folderSelectedIndex;
+        updateModeIndicators();
+        renderFolderView();
+    } else {
+        if (state.playlist.length === 0) return;
+        state.mode = 'visual';
+        state.visualStart = state.selectedIndex;
+        updateModeIndicators();
+        renderPlaylist();
+    }
 }
 
 function exitVisualMode() {
     state.mode = 'normal';
     state.visualStart = -1;
     updateModeIndicators();
-    renderPlaylist();
+    if (state.viewMode === 'folder') {
+        renderFolderView();
+    } else {
+        renderPlaylist();
+    }
 }
 
 function getVisualSelection() {
     if (state.visualStart === -1) return [];
-    const start = Math.min(state.visualStart, state.selectedIndex);
-    const end = Math.max(state.visualStart, state.selectedIndex);
+    const currentIndex = state.viewMode === 'folder' ? state.folderSelectedIndex : state.selectedIndex;
+    const start = Math.min(state.visualStart, currentIndex);
+    const end = Math.max(state.visualStart, currentIndex);
     const indices = [];
     for (let i = start; i <= end; i++) {
         indices.push(i);
@@ -1239,6 +1284,14 @@ function addVisualSelectionToQueue() {
     const selection = getVisualSelection();
     if (selection.length === 0) return;
     
+    if (state.viewMode === 'folder') {
+        // In folder view, queue only works with files (not folders)
+        // and requires tracks to be in the current playlist
+        updateStatus('Queue only works in list view. Use "p" to add to playlist.');
+        exitVisualMode();
+        return;
+    }
+    
     selection.forEach(index => {
         state.queue.push(index);
     });
@@ -1249,12 +1302,22 @@ function addVisualSelectionToQueue() {
 }
 
 function handleVisualModeKeyDown(e) {
+    const isFolderView = state.viewMode === 'folder';
+    const items = isFolderView ? state.folderContents : state.playlist;
+    const currentIndex = isFolderView ? state.folderSelectedIndex : state.selectedIndex;
+    const render = isFolderView ? renderFolderView : renderPlaylist;
+    const scroll = isFolderView ? scrollToFolderSelected : scrollToSelected;
+    
     // Handle multi-key commands in visual mode
     if (state.pendingKey === 'g') {
         if (e.key === 'g') {
-            state.selectedIndex = 0;
-            renderPlaylist();
-            scrollToSelected();
+            if (isFolderView) {
+                state.folderSelectedIndex = 0;
+            } else {
+                state.selectedIndex = 0;
+            }
+            render();
+            scroll();
         }
         state.pendingKey = null;
         return;
@@ -1262,32 +1325,44 @@ function handleVisualModeKeyDown(e) {
     
     switch (e.key) {
         case 'j':
-            if (state.selectedIndex < state.playlist.length - 1) {
-                state.selectedIndex++;
-                renderPlaylist();
-                scrollToSelected();
+            if (currentIndex < items.length - 1) {
+                if (isFolderView) {
+                    state.folderSelectedIndex++;
+                } else {
+                    state.selectedIndex++;
+                }
+                render();
+                scroll();
             }
             break;
         case 'k':
-            if (state.selectedIndex > 0) {
-                state.selectedIndex--;
-                renderPlaylist();
-                scrollToSelected();
+            if (currentIndex > 0) {
+                if (isFolderView) {
+                    state.folderSelectedIndex--;
+                } else {
+                    state.selectedIndex--;
+                }
+                render();
+                scroll();
             }
             break;
         case 'g':
             state.pendingKey = 'g';
             break;
         case 'G':
-            state.selectedIndex = state.playlist.length - 1;
-            renderPlaylist();
-            scrollToSelected();
+            if (isFolderView) {
+                state.folderSelectedIndex = items.length - 1;
+            } else {
+                state.selectedIndex = items.length - 1;
+            }
+            render();
+            scroll();
             break;
         case 'a':
             addVisualSelectionToQueue();
             break;
         case 'p':
-            showAddToPlaylistPicker(getVisualSelection());
+            showAddToPlaylistPicker(getSelectedTrackPaths(getVisualSelection()));
             break;
         case 'v':
         case 'Escape':
@@ -1508,14 +1583,17 @@ function renderFolderView() {
     
     const folderName = getFolderName(state.currentFolder);
     const matchedIndices = new Set(state.filteredFolderContents.map(({ index }) => index));
+    const visualSelection = state.mode === 'visual' ? new Set(getVisualSelection()) : new Set();
     
     elements.playlistCount.textContent = `${folderName} (${state.folderContents.length} items)`;
     
     elements.playlist.innerHTML = state.folderContents.map((item, index) => {
         const isSelected = index === state.folderSelectedIndex;
+        const isVisualSelected = visualSelection.has(index);
         const isMatch = state.filterText && matchedIndices.has(index);
         const classes = ['track-item'];
         if (isSelected) classes.push('selected');
+        if (isVisualSelected) classes.push('visual-selected');
         if (item.is_folder) classes.push('folder-item');
         if (isMatch) classes.push('match');
         
