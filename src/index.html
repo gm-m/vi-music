@@ -14,7 +14,22 @@
         </header>
 
         <main class="main">
-            <div class="player-section">
+            <div class="playlist-section">
+                <div class="playlist-header">
+                    <span class="playlist-title">Playlist</span>
+                    <span class="playlist-count" id="playlistCount">0 tracks</span>
+                </div>
+                <div class="playlist" id="playlist">
+                    <div class="empty-playlist">
+                        <p>No tracks loaded</p>
+                        <p class="hint">Press <kbd>o</kbd> to open a folder</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <div class="player-bar">
+            <div class="player-bar-left">
                 <div class="now-playing">
                     <div class="track-art">
                         <svg viewBox="0 0 24 24" fill="currentColor">
@@ -26,7 +41,9 @@
                         <div class="track-status" id="trackStatus">Press 'o' to open folder</div>
                     </div>
                 </div>
+            </div>
 
+            <div class="player-bar-center">
                 <div class="controls">
                     <button class="control-btn" id="prevBtn" title="Previous (K)">
                         <svg viewBox="0 0 24 24" fill="currentColor">
@@ -52,7 +69,6 @@
                         </svg>
                     </button>
                 </div>
-
                 <div class="progress-section">
                     <span class="time-elapsed" id="timeElapsed">0:00</span>
                     <div class="progress-bar" id="progressBar">
@@ -60,7 +76,9 @@
                     </div>
                     <span class="time-total" id="timeTotal">0:00</span>
                 </div>
+            </div>
 
+            <div class="player-bar-right">
                 <div class="volume-section">
                     <span class="volume-label">VOL</span>
                     <div class="volume-bar">
@@ -69,20 +87,7 @@
                     <span class="volume-value" id="volumeValue">100%</span>
                 </div>
             </div>
-
-            <div class="playlist-section">
-                <div class="playlist-header">
-                    <span class="playlist-title">Playlist</span>
-                    <span class="playlist-count" id="playlistCount">0 tracks</span>
-                </div>
-                <div class="playlist" id="playlist">
-                    <div class="empty-playlist">
-                        <p>No tracks loaded</p>
-                        <p class="hint">Press <kbd>o</kbd> to open a folder</p>
-                    </div>
-                </div>
-            </div>
-        </main>
+        </div>
 
         <footer class="footer">
             <div class="help-bar" id="helpBar">
