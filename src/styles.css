@@ -389,10 +389,32 @@ body {
     background: var(--selection);
 }
 
+.track-item.folder-item {
+    color: var(--warning);
+}
+
+.track-item.folder-item .track-number {
+    color: var(--warning);
+}
+
+.folder-icon,
+.file-icon {
+    width: 16px;
+    height: 16px;
+}
+
+.track-count {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
 .track-number {
     font-size: 0.75rem;
     color: var(--text-muted);
     min-width: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .track-item-name {

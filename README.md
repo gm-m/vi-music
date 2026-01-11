@@ -81,9 +81,18 @@ A minimal, VIM-style music player built with Tauri and vanilla JavaScript.
 | Key | Action |
 |-----|--------|
 | `o` | Open folder |
+| `Tab` | Toggle list/folder view |
+| `Backspace` | Go up folder (in folder view) |
 | `:` | Enter command mode |
 | `?` | Toggle help |
 | `Esc` | Close modals / Exit mode |
+
+### Folder View
+In folder view, you can browse the folder structure:
+- **`j`/`k`** - Navigate items
+- **`Enter`** - Open folder or play track
+- **`Backspace`** - Go to parent folder
+- **`Tab`** - Switch back to list view
 
 ### Visual Mode
 | Key | Action |

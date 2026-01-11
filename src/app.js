@@ -34,6 +34,13 @@ const state = {
     queue: [], // Array of playlist indices to play next
     queueViewOpen: false,
     queueSelectedIndex: 0,
+    // Folder browsing
+    viewMode: 'list', // 'list' | 'folder'
+    rootFolder: null,
+    currentFolder: null,
+    folderContents: [],
+    folderSelectedIndex: 0,
+    filteredFolderContents: [],
 };
 
 // DOM Elements
@@ -237,6 +244,10 @@ function handleKeyDown(e) {
             break;
             
         // General
+        case 'Tab':
+            e.preventDefault();
+            toggleViewMode();
+            break;
         case 'o':
             openFolder();
             break;
@@ -256,6 +267,12 @@ function handleKeyDown(e) {
             break;
         case '?':
             toggleHelp();
+            break;
+        case 'Backspace':
+            if (state.viewMode === 'folder') {
+                e.preventDefault();
+                navigateFolderUp();
+            }
             break;
         case 'Escape':
             if (state.filterText) {
@@ -383,18 +400,39 @@ async function clearDefaultFolder() {
 
 // Navigation
 function moveSelection(delta) {
-    if (state.playlist.length === 0) return;
+    if (state.viewMode === 'folder') {
+        if (state.folderContents.length === 0) return;
+        const newIndex = Math.max(0, Math.min(state.folderContents.length - 1, state.folderSelectedIndex + delta));
+        state.folderSelectedIndex = newIndex;
+        renderFolderView();
+        return;
+    }
     
+    if (state.playlist.length === 0) return;
     const newIndex = Math.max(0, Math.min(state.playlist.length - 1, state.selectedIndex + delta));
     selectTrack(newIndex);
 }
 
 function goToTop() {
+    if (state.viewMode === 'folder') {
+        if (state.folderContents.length === 0) return;
+        state.folderSelectedIndex = 0;
+        renderFolderView();
+        return;
+    }
+    
     if (state.playlist.length === 0) return;
     selectTrack(0);
 }
 
 function goToBottom() {
+    if (state.viewMode === 'folder') {
+        if (state.folderContents.length === 0) return;
+        state.folderSelectedIndex = state.folderContents.length - 1;
+        renderFolderView();
+        return;
+    }
+    
     if (state.playlist.length === 0) return;
     selectTrack(state.playlist.length - 1);
 }
@@ -414,6 +452,12 @@ function scrollToSelected() {
 
 // Playback Controls
 async function playSelected() {
+    if (state.viewMode === 'folder') {
+        if (state.folderContents.length === 0) return;
+        handleFolderItemAction(state.folderSelectedIndex);
+        return;
+    }
+    
     if (state.playlist.length === 0) return;
     await playTrack(state.selectedIndex);
 }
@@ -996,11 +1040,156 @@ async function loadFolder(path) {
         state.playlist = tracks;
         state.selectedIndex = 0;
         state.playingIndex = -1;
+        state.rootFolder = path;
+        state.currentFolder = path;
+        state.viewMode = 'list';
         renderPlaylist();
         updateStatus(`Loaded ${tracks.length} tracks`);
     } catch (err) {
         console.error('Failed to load folder:', err);
         updateStatus(`Error: ${err}`);
+    }
+}
+
+// View Mode Toggle
+function toggleViewMode() {
+    if (!state.rootFolder) {
+        updateStatus('No folder loaded');
+        return;
+    }
+    
+    if (state.viewMode === 'list') {
+        state.viewMode = 'folder';
+        state.currentFolder = state.rootFolder;
+        state.folderSelectedIndex = 0;
+        loadFolderContents(state.currentFolder);
+    } else {
+        state.viewMode = 'list';
+        state.selectedIndex = 0;
+        renderPlaylist();
+        updateStatus('List view');
+    }
+    updateViewModeIndicator();
+}
+
+async function loadFolderContents(path) {
+    try {
+        const contents = await invoke('browse_folder', { 
+            path, 
+            rootPath: state.rootFolder 
+        });
+        state.folderContents = contents.items;
+        state.currentFolder = contents.path;
+        state.folderParent = contents.parent;
+        state.folderSelectedIndex = 0;
+        // Clear filter when navigating folders
+        state.filterText = '';
+        state.filteredFolderContents = [];
+        elements.filterInput.value = '';
+        renderFolderView();
+        updateStatus(`Folder: ${getFolderName(path)}`);
+    } catch (err) {
+        console.error('Failed to browse folder:', err);
+        updateStatus(`Error: ${err}`);
+    }
+}
+
+function getFolderName(path) {
+    return path.split(/[/\\]/).pop() || path;
+}
+
+function renderFolderView() {
+    if (state.folderContents.length === 0) {
+        elements.playlist.innerHTML = `
+            <div class="empty-playlist">
+                <p>No music in this folder</p>
+                <p class="hint">Press <kbd>Backspace</kbd> to go back</p>
+            </div>
+        `;
+        elements.playlistCount.textContent = 'Empty folder';
+        return;
+    }
+    
+    const folderName = getFolderName(state.currentFolder);
+    const matchedIndices = new Set(state.filteredFolderContents.map(({ index }) => index));
+    
+    elements.playlistCount.textContent = `${folderName} (${state.folderContents.length} items)`;
+    
+    elements.playlist.innerHTML = state.folderContents.map((item, index) => {
+        const isSelected = index === state.folderSelectedIndex;
+        const isMatch = state.filterText && matchedIndices.has(index);
+        const classes = ['track-item'];
+        if (isSelected) classes.push('selected');
+        if (item.is_folder) classes.push('folder-item');
+        if (isMatch) classes.push('match');
+        
+        const icon = item.is_folder 
+            ? `<svg class="folder-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>`
+            : `<svg class="file-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>`;
+        
+        const info = item.is_folder 
+            ? `<span class="track-count">${item.track_count} tracks</span>`
+            : `<span class="track-duration">${formatDuration(item.duration)}</span>`;
+        
+        return `
+            <div class="${classes.join(' ')}" data-index="${index}" data-path="${escapeHtml(item.path)}" data-is-folder="${item.is_folder}">
+                <span class="track-number">${icon}</span>
+                <span class="track-item-name">${escapeHtml(item.name)}</span>
+                ${info}
+            </div>
+        `;
+    }).join('');
+    
+    // Add click handlers
+    elements.playlist.querySelectorAll('.track-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const index = parseInt(item.dataset.index);
+            state.folderSelectedIndex = index;
+            renderFolderView();
+        });
+        item.addEventListener('dblclick', () => {
+            handleFolderItemAction(parseInt(item.dataset.index));
+        });
+    });
+    
+    scrollToSelected();
+}
+
+function handleFolderItemAction(index) {
+    const item = state.folderContents[index];
+    if (!item) return;
+    
+    if (item.is_folder) {
+        loadFolderContents(item.path);
+    } else {
+        playFileFromFolder(item.path);
+    }
+}
+
+async function playFileFromFolder(filePath) {
+    // Find the track in the playlist by path
+    const trackIndex = state.playlist.findIndex(t => t.path === filePath);
+    if (trackIndex !== -1) {
+        await playTrack(trackIndex);
+    } else {
+        updateStatus('Track not in playlist');
+    }
+}
+
+function navigateFolderUp() {
+    if (state.folderParent && state.currentFolder !== state.rootFolder) {
+        loadFolderContents(state.folderParent);
+    } else {
+        updateStatus('Already at root folder');
+    }
+}
+
+function updateViewModeIndicator() {
+    const indicator = state.viewMode === 'folder' ? 'FOLDER' : 'LIST';
+    // Update playlist title to show current view mode
+    const title = document.querySelector('.playlist-title');
+    if (title) {
+        title.textContent = state.viewMode === 'folder' ? 'Browse' : 'Playlist';
     }
 }
 
@@ -1146,7 +1335,10 @@ function handleFilterKeydown(e) {
     if (e.key === 'Enter') {
         e.preventDefault();
         exitFilterMode();
-        if (state.filteredPlaylist.length > 0) {
+        const hasMatches = state.viewMode === 'folder' 
+            ? state.filteredFolderContents.length > 0 
+            : state.filteredPlaylist.length > 0;
+        if (hasMatches) {
             jumpToNextMatch();
         }
     } else if (e.key === 'Escape') {
@@ -1159,29 +1351,59 @@ function handleFilterKeydown(e) {
 function applyFilter() {
     if (!state.filterText) {
         state.filteredPlaylist = [];
-        renderPlaylist();
+        state.filteredFolderContents = [];
+        renderCurrentView();
         return;
     }
     
     const query = state.filterText.toLowerCase();
-    state.filteredPlaylist = state.playlist
-        .map((track, index) => ({ track, index }))
-        .filter(({ track }) => track.name.toLowerCase().includes(query));
     
-    renderPlaylist();
+    if (state.viewMode === 'folder') {
+        state.filteredFolderContents = state.folderContents
+            .map((item, index) => ({ item, index }))
+            .filter(({ item }) => item.name.toLowerCase().includes(query));
+        renderFolderView();
+    } else {
+        state.filteredPlaylist = state.playlist
+            .map((track, index) => ({ track, index }))
+            .filter(({ track }) => track.name.toLowerCase().includes(query));
+        renderPlaylist();
+    }
     updateFilterStatus();
 }
 
 function clearFilter() {
     state.filterText = '';
     state.filteredPlaylist = [];
+    state.filteredFolderContents = [];
     elements.filterInput.value = '';
-    renderPlaylist();
+    renderCurrentView();
+}
+
+function renderCurrentView() {
+    if (state.viewMode === 'folder') {
+        renderFolderView();
+    } else {
+        renderPlaylist();
+    }
 }
 
 function jumpToNextMatch() {
-    if (state.filteredPlaylist.length === 0) return;
+    if (state.viewMode === 'folder') {
+        if (state.filteredFolderContents.length === 0) return;
+        const currentIdx = state.folderSelectedIndex;
+        const nextMatch = state.filteredFolderContents.find(({ index }) => index > currentIdx);
+        if (nextMatch) {
+            state.folderSelectedIndex = nextMatch.index;
+        } else {
+            state.folderSelectedIndex = state.filteredFolderContents[0].index;
+        }
+        renderFolderView();
+        scrollToSelected();
+        return;
+    }
     
+    if (state.filteredPlaylist.length === 0) return;
     const currentIdx = state.selectedIndex;
     const nextMatch = state.filteredPlaylist.find(({ index }) => index > currentIdx);
     
@@ -1193,8 +1415,21 @@ function jumpToNextMatch() {
 }
 
 function jumpToPrevMatch() {
-    if (state.filteredPlaylist.length === 0) return;
+    if (state.viewMode === 'folder') {
+        if (state.filteredFolderContents.length === 0) return;
+        const currentIdx = state.folderSelectedIndex;
+        const matches = state.filteredFolderContents.filter(({ index }) => index < currentIdx);
+        if (matches.length > 0) {
+            state.folderSelectedIndex = matches[matches.length - 1].index;
+        } else {
+            state.folderSelectedIndex = state.filteredFolderContents[state.filteredFolderContents.length - 1].index;
+        }
+        renderFolderView();
+        scrollToSelected();
+        return;
+    }
     
+    if (state.filteredPlaylist.length === 0) return;
     const currentIdx = state.selectedIndex;
     const matches = state.filteredPlaylist.filter(({ index }) => index < currentIdx);
     
@@ -1206,8 +1441,12 @@ function jumpToPrevMatch() {
 }
 
 function updateFilterStatus() {
-    if (state.filterText && state.filteredPlaylist.length > 0) {
-        updateStatus(`${state.filteredPlaylist.length} matches`);
+    const matchCount = state.viewMode === 'folder' 
+        ? state.filteredFolderContents.length 
+        : state.filteredPlaylist.length;
+    
+    if (state.filterText && matchCount > 0) {
+        updateStatus(`${matchCount} matches`);
     } else if (state.filterText) {
         updateStatus('No matches');
     }

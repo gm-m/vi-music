@@ -446,6 +446,22 @@ struct TrackInfo {
     duration: Option<u64>,
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+struct FolderItem {
+    name: String,
+    path: String,
+    is_folder: bool,
+    track_count: usize,
+    duration: Option<u64>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct FolderContents {
+    path: String,
+    parent: Option<String>,
+    items: Vec<FolderItem>,
+}
+
 fn get_audio_duration(path: &str) -> Option<u64> {
     let path_buf = std::path::Path::new(path);
     let ext = path_buf.extension()?.to_str()?.to_lowercase();
@@ -523,6 +539,78 @@ fn load_folder(path: String, state: State<AppState>) -> Result<Vec<TrackInfo>, S
     *state.current_index.lock().unwrap() = 0;
     
     Ok(track_infos)
+}
+
+#[tauri::command]
+fn browse_folder(path: String, root_path: String) -> Result<FolderContents, String> {
+    let path_buf = PathBuf::from(&path);
+    let root_buf = PathBuf::from(&root_path);
+    
+    if !path_buf.exists() || !path_buf.is_dir() {
+        return Err("Invalid folder path".to_string());
+    }
+    
+    let parent = if path_buf != root_buf {
+        path_buf.parent().map(|p| p.to_string_lossy().to_string())
+    } else {
+        None
+    };
+    
+    let mut items = Vec::new();
+    
+    if let Ok(entries) = std::fs::read_dir(&path) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let entry_path = entry.path();
+            let name = entry_path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+            
+            if entry_path.is_dir() {
+                let track_count = count_audio_files(&entry_path);
+                if track_count > 0 {
+                    items.push(FolderItem {
+                        name,
+                        path: entry_path.to_string_lossy().to_string(),
+                        is_folder: true,
+                        track_count,
+                        duration: None,
+                    });
+                }
+            } else if is_audio_file(&entry_path) {
+                let duration = get_audio_duration(&entry_path.to_string_lossy());
+                items.push(FolderItem {
+                    name,
+                    path: entry_path.to_string_lossy().to_string(),
+                    is_folder: false,
+                    track_count: 0,
+                    duration,
+                });
+            }
+        }
+    }
+    
+    items.sort_by(|a, b| {
+        match (a.is_folder, b.is_folder) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+        }
+    });
+    
+    Ok(FolderContents {
+        path,
+        parent,
+        items,
+    })
+}
+
+fn count_audio_files(path: &PathBuf) -> usize {
+    WalkDir::new(path)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().is_file() && is_audio_file(&e.path().to_path_buf()))
+        .count()
 }
 
 #[tauri::command]
@@ -746,6 +834,7 @@ fn main() {
         .manage(AppState::new())
         .invoke_handler(tauri::generate_handler![
             load_folder,
+            browse_folder,
             play_track,
             toggle_pause,
             stop,
