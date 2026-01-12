@@ -53,6 +53,12 @@ const state = {
     // Sleep timer
     sleepTimerEnd: null, // Timestamp when playback should stop
     sleepTimerInterval: null,
+    // Bookmarks: { 'a': { track: 'path', position: seconds }, ... }
+    bookmarks: {},
+    // A-B Loop
+    loopA: null, // Start position in seconds
+    loopB: null, // End position in seconds
+    loopInterval: null,
 };
 
 // DOM Elements
@@ -85,6 +91,7 @@ const elements = {
     queueList: document.getElementById('queueList'),
     speedIndicator: document.getElementById('speedIndicator'),
     sleepTimerIndicator: document.getElementById('sleepTimerIndicator'),
+    loopIndicator: document.getElementById('loopIndicator'),
 };
 
 // Initialize
@@ -177,7 +184,28 @@ function handleKeyDown(e) {
     
     if (state.pendingKey === 'd') {
         if (e.key === 'd') {
-            // dd in normal mode does nothing
+            // dd - delete selected track(s) from playlist
+            if (state.viewMode === 'list') {
+                deleteSelectedTracks();
+            }
+        }
+        state.pendingKey = null;
+        return;
+    }
+    
+    if (state.pendingKey === "'") {
+        // 'a - jump to bookmark a
+        if (/[a-z]/i.test(e.key)) {
+            jumpToBookmark(e.key.toLowerCase());
+        }
+        state.pendingKey = null;
+        return;
+    }
+    
+    if (state.pendingKey === 'm') {
+        // ma - set bookmark a (alternative to :mark a)
+        if (/[a-z]/i.test(e.key)) {
+            setBookmark(e.key.toLowerCase());
         }
         state.pendingKey = null;
         return;
@@ -263,6 +291,26 @@ function handleKeyDown(e) {
             resetSpeed();
             break;
         
+        // A-B Loop
+        case 'b':
+            if (e.shiftKey) {
+                setLoopB();
+            } else {
+                setLoopA();
+            }
+            break;
+        case 'B':
+            setLoopB();
+            break;
+        case 'c':
+            if (e.shiftKey) {
+                clearLoop();
+            }
+            break;
+        case 'C':
+            clearLoop();
+            break;
+        
         // Queue
         case 'a':
             addToQueue();
@@ -281,6 +329,14 @@ function handleKeyDown(e) {
             break;
         case 'p':
             showAddToPlaylistPicker(getSelectedTrackPaths());
+            break;
+        case "'":
+            state.pendingKey = "'";
+            break;
+        case 'm':
+            if (!e.shiftKey) {
+                state.pendingKey = 'm';
+            }
             break;
             
         // General
@@ -356,7 +412,34 @@ function handleCommandInput(e) {
 }
 
 function executeCommand(cmd) {
-    const parts = cmd.trim().toLowerCase().split(/\s+/);
+    const trimmed = cmd.trim();
+    
+    // Check for range commands like :10,20d
+    const rangeMatch = trimmed.match(/^(\d+),(\d+)([a-z]+)$/i);
+    if (rangeMatch) {
+        const start = parseInt(rangeMatch[1]);
+        const end = parseInt(rangeMatch[2]);
+        const action = rangeMatch[3].toLowerCase();
+        
+        if (action === 'd' || action === 'delete') {
+            deleteTrackRange(start, end);
+            return;
+        }
+    }
+    
+    // Check for single line command like :10d
+    const singleMatch = trimmed.match(/^(\d+)([a-z]+)$/i);
+    if (singleMatch) {
+        const line = parseInt(singleMatch[1]);
+        const action = singleMatch[2].toLowerCase();
+        
+        if (action === 'd' || action === 'delete') {
+            deleteTrackRange(line, line);
+            return;
+        }
+    }
+    
+    const parts = trimmed.toLowerCase().split(/\s+/);
     const command = parts[0];
     
     switch (command) {
@@ -438,20 +521,49 @@ function executeCommand(cmd) {
             break;
         case 'sleep':
             if (parts[1]) {
-                const minutes = parseInt(parts[1]);
-                if (!isNaN(minutes) && minutes >= 0) {
-                    setSleepTimer(minutes);
+                const arg = parts[1];
+                // Check for +N or -N syntax to add/subtract time
+                if (arg.startsWith('+') || arg.startsWith('-')) {
+                    const delta = parseInt(arg);
+                    if (!isNaN(delta)) {
+                        adjustSleepTimer(delta);
+                    } else {
+                        updateStatus('Usage: :sleep +<minutes> or :sleep -<minutes>');
+                    }
                 } else {
-                    updateStatus('Usage: :sleep <minutes> (0 to cancel)');
+                    const minutes = parseInt(arg);
+                    if (!isNaN(minutes) && minutes >= 0) {
+                        setSleepTimer(minutes);
+                    } else {
+                        updateStatus('Usage: :sleep <minutes> (0 to cancel)');
+                    }
                 }
             } else {
-                // Show current timer status or clear it
+                // Show current timer status
                 if (state.sleepTimerEnd) {
                     const remaining = Math.ceil((state.sleepTimerEnd - Date.now()) / 60000);
                     updateStatus(`Sleep timer: ${remaining} minute${remaining !== 1 ? 's' : ''} remaining`);
                 } else {
                     updateStatus('No sleep timer set. Usage: :sleep <minutes>');
                 }
+            }
+            break;
+        case 'mark':
+            if (parts[1] && parts[1].length === 1 && /[a-z]/i.test(parts[1])) {
+                setBookmark(parts[1].toLowerCase());
+            } else {
+                updateStatus('Usage: :mark <a-z>');
+            }
+            break;
+        case 'marks':
+            showBookmarks();
+            break;
+        case 'delmark':
+        case 'dm':
+            if (parts[1] && parts[1].length === 1 && /[a-z]/i.test(parts[1])) {
+                deleteBookmark(parts[1].toLowerCase());
+            } else {
+                updateStatus('Usage: :delmark <a-z>');
             }
             break;
     }
@@ -934,14 +1046,22 @@ async function playSelected() {
     await playTrack(state.selectedIndex);
 }
 
-async function playTrack(index) {
+async function playTrack(index, seekPosition = 0) {
     try {
-        const result = await invoke('play_track', { index });
+        // Clear A-B loop when changing tracks
+        if (state.playingIndex !== index) {
+            state.loopA = null;
+            state.loopB = null;
+            stopLoopMonitor();
+            updateLoopDisplay();
+        }
+        
+        const result = await invoke('play_track', { index, skipSecs: seekPosition });
         state.playingIndex = index;
         state.isPlaying = true;
         state.isPaused = false;
         state.duration = result.duration;
-        state.elapsed = 0;
+        state.elapsed = seekPosition;
         updateNowPlaying(result.name);
         renderPlaylist();
         updatePlayButton();
@@ -1128,6 +1248,180 @@ function setSleepTimer(minutes) {
     
     updateSleepTimerDisplay(minutes * 60 * 1000);
     updateStatus(`Sleep timer set for ${minutes} minute${minutes > 1 ? 's' : ''}`);
+}
+
+// Bookmarks
+function setBookmark(key) {
+    if (!state.isPlaying) {
+        updateStatus('No track playing to bookmark');
+        return;
+    }
+    
+    const track = state.playlist[state.playingIndex];
+    state.bookmarks[key] = {
+        track: track.path,
+        trackIndex: state.playingIndex,
+        position: state.elapsed
+    };
+    
+    updateStatus(`Bookmark '${key}' set at ${formatDuration(state.elapsed)}`);
+}
+
+function jumpToBookmark(key) {
+    const bookmark = state.bookmarks[key];
+    if (!bookmark) {
+        updateStatus(`No bookmark '${key}'`);
+        return;
+    }
+    
+    // Check if it's the same track
+    if (state.isPlaying && state.playlist[state.playingIndex]?.path === bookmark.track) {
+        // Just seek to position
+        seekTo(bookmark.position);
+        updateStatus(`Jumped to bookmark '${key}' at ${formatDuration(bookmark.position)}`);
+    } else {
+        // Find the track in playlist and play it
+        const trackIndex = state.playlist.findIndex(t => t.path === bookmark.track);
+        if (trackIndex >= 0) {
+            playTrack(trackIndex, bookmark.position);
+            updateStatus(`Jumped to bookmark '${key}' at ${formatDuration(bookmark.position)}`);
+        } else {
+            updateStatus(`Bookmark '${key}' track not in playlist`);
+        }
+    }
+}
+
+function deleteBookmark(key) {
+    if (state.bookmarks[key]) {
+        delete state.bookmarks[key];
+        updateStatus(`Bookmark '${key}' deleted`);
+    } else {
+        updateStatus(`No bookmark '${key}'`);
+    }
+}
+
+function showBookmarks() {
+    const keys = Object.keys(state.bookmarks).sort();
+    if (keys.length === 0) {
+        updateStatus('No bookmarks set');
+        return;
+    }
+    
+    const list = keys.map(k => {
+        const b = state.bookmarks[k];
+        const trackName = state.playlist.find(t => t.path === b.track)?.name || 'Unknown';
+        return `'${k}': ${trackName} @ ${formatDuration(b.position)}`;
+    }).join(', ');
+    
+    updateStatus(`Bookmarks: ${list}`);
+}
+
+// A-B Loop
+function setLoopA() {
+    if (!state.isPlaying) {
+        updateStatus('No track playing');
+        return;
+    }
+    
+    state.loopA = state.elapsed;
+    state.loopB = null; // Reset B when setting new A
+    stopLoopMonitor();
+    updateLoopDisplay();
+    updateStatus(`Loop A set at ${formatDuration(state.loopA)} - press B to set end point`);
+}
+
+function setLoopB() {
+    if (!state.isPlaying) {
+        updateStatus('No track playing');
+        return;
+    }
+    
+    if (state.loopA === null) {
+        updateStatus('Set loop point A first (press b)');
+        return;
+    }
+    
+    if (state.elapsed <= state.loopA) {
+        updateStatus('Loop B must be after loop A');
+        return;
+    }
+    
+    state.loopB = state.elapsed;
+    startLoopMonitor();
+    updateLoopDisplay();
+    updateStatus(`Loop: ${formatDuration(state.loopA)} - ${formatDuration(state.loopB)}`);
+}
+
+function clearLoop() {
+    state.loopA = null;
+    state.loopB = null;
+    stopLoopMonitor();
+    updateLoopDisplay();
+    updateStatus('Loop cleared');
+}
+
+function startLoopMonitor() {
+    stopLoopMonitor();
+    
+    state.loopInterval = setInterval(() => {
+        if (!state.isPlaying || state.loopA === null || state.loopB === null) {
+            stopLoopMonitor();
+            return;
+        }
+        
+        // Check if we've passed loop B point
+        if (state.elapsed >= state.loopB) {
+            seekTo(state.loopA);
+        }
+    }, 100); // Check every 100ms for smooth looping
+}
+
+function stopLoopMonitor() {
+    if (state.loopInterval) {
+        clearInterval(state.loopInterval);
+        state.loopInterval = null;
+    }
+}
+
+function updateLoopDisplay() {
+    if (!elements.loopIndicator) return;
+    
+    if (state.loopA !== null && state.loopB !== null) {
+        elements.loopIndicator.textContent = `A-B`;
+        elements.loopIndicator.classList.add('active');
+    } else if (state.loopA !== null) {
+        elements.loopIndicator.textContent = `A...`;
+        elements.loopIndicator.classList.add('active');
+    } else {
+        elements.loopIndicator.textContent = '';
+        elements.loopIndicator.classList.remove('active');
+    }
+}
+
+function adjustSleepTimer(deltaMinutes) {
+    if (!state.sleepTimerEnd) {
+        // No timer running, start a new one if positive
+        if (deltaMinutes > 0) {
+            setSleepTimer(deltaMinutes);
+        } else {
+            updateStatus('No sleep timer to adjust');
+        }
+        return;
+    }
+    
+    // Add/subtract time from existing timer
+    const newEnd = state.sleepTimerEnd + (deltaMinutes * 60 * 1000);
+    const remaining = newEnd - Date.now();
+    
+    if (remaining <= 0) {
+        clearSleepTimer();
+        updateStatus('Sleep timer cleared');
+    } else {
+        state.sleepTimerEnd = newEnd;
+        const mins = Math.ceil(remaining / 60000);
+        updateSleepTimerDisplay(remaining);
+        updateStatus(`Sleep timer: ${deltaMinutes > 0 ? '+' : ''}${deltaMinutes} min (${mins} min remaining)`);
+    }
 }
 
 function clearSleepTimer() {
@@ -1677,6 +1971,82 @@ function removeFromQueue(index) {
         updateQueueDisplay();
         updateStatus(`Removed from queue: ${track.name}`);
     }
+}
+
+// Track Deletion
+function deleteSelectedTracks() {
+    if (state.playlist.length === 0) return;
+    
+    let indicesToDelete;
+    if (state.mode === 'visual') {
+        indicesToDelete = getVisualSelection();
+        exitVisualMode();
+    } else {
+        indicesToDelete = [state.selectedIndex];
+    }
+    
+    if (indicesToDelete.length === 0) return;
+    
+    // Sort in descending order to delete from end first
+    indicesToDelete.sort((a, b) => b - a);
+    
+    // Check if we're deleting the currently playing track
+    let newPlayingIndex = state.playingIndex;
+    
+    for (const idx of indicesToDelete) {
+        state.playlist.splice(idx, 1);
+        
+        // Adjust playing index
+        if (idx < newPlayingIndex) {
+            newPlayingIndex--;
+        } else if (idx === newPlayingIndex) {
+            newPlayingIndex = -1; // Currently playing track was deleted
+        }
+    }
+    
+    state.playingIndex = newPlayingIndex;
+    
+    // Adjust selected index
+    if (state.selectedIndex >= state.playlist.length) {
+        state.selectedIndex = Math.max(0, state.playlist.length - 1);
+    }
+    
+    renderPlaylist();
+    updateStatus(`Deleted ${indicesToDelete.length} track${indicesToDelete.length > 1 ? 's' : ''}`);
+}
+
+function deleteTrackRange(start, end) {
+    if (state.playlist.length === 0) return;
+    
+    // Convert to 0-indexed
+    const startIdx = Math.max(0, start - 1);
+    const endIdx = Math.min(state.playlist.length - 1, end - 1);
+    
+    if (startIdx > endIdx) {
+        updateStatus('Invalid range');
+        return;
+    }
+    
+    const count = endIdx - startIdx + 1;
+    
+    // Check if we're deleting the currently playing track
+    let newPlayingIndex = state.playingIndex;
+    if (state.playingIndex >= startIdx && state.playingIndex <= endIdx) {
+        newPlayingIndex = -1;
+    } else if (state.playingIndex > endIdx) {
+        newPlayingIndex -= count;
+    }
+    
+    state.playlist.splice(startIdx, count);
+    state.playingIndex = newPlayingIndex;
+    
+    // Adjust selected index
+    if (state.selectedIndex >= state.playlist.length) {
+        state.selectedIndex = Math.max(0, state.playlist.length - 1);
+    }
+    
+    renderPlaylist();
+    updateStatus(`Deleted ${count} track${count > 1 ? 's' : ''} (lines ${start}-${end})`);
 }
 
 // Folder Loading

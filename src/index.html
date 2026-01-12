@@ -11,6 +11,7 @@
         <header class="header">
             <h1 class="logo">VI Music</h1>
             <div class="header-indicators">
+                <span class="loop-indicator" id="loopIndicator"></span>
                 <span class="sleep-timer-indicator" id="sleepTimerIndicator"></span>
                 <span class="speed-indicator" id="speedIndicator"></span>
                 <div class="mode-indicator" id="modeIndicator">NORMAL</div>
@@ -160,11 +161,23 @@
                     <div class="shortcut"><kbd>\</kbd> Reset speed (1.0x)</div>
                 </div>
                 <div class="help-section">
+                    <h3>A-B Loop</h3>
+                    <div class="shortcut"><kbd>b</kbd> Set loop point A</div>
+                    <div class="shortcut"><kbd>B</kbd> Set loop point B</div>
+                    <div class="shortcut"><kbd>C</kbd> Clear loop</div>
+                </div>
+                <div class="help-section">
+                    <h3>Bookmarks</h3>
+                    <div class="shortcut"><kbd>m</kbd>+<kbd>a-z</kbd> Set bookmark</div>
+                    <div class="shortcut"><kbd>'</kbd>+<kbd>a-z</kbd> Jump to bookmark</div>
+                    <div class="shortcut"><kbd>:marks</kbd> Show all bookmarks</div>
+                </div>
+                <div class="help-section">
                     <h3>Queue</h3>
                     <div class="shortcut"><kbd>a</kbd> Add to queue</div>
                     <div class="shortcut"><kbd>A</kbd> Add to queue (play if stopped)</div>
                     <div class="shortcut"><kbd>q</kbd> Open queue view</div>
-                    <div class="shortcut"><kbd>dd</kbd> Remove from queue (in view)</div>
+                    <div class="shortcut"><kbd>dd</kbd> Delete track / remove from queue</div>
                 </div>
                 <div class="help-section">
                     <h3>General</h3>

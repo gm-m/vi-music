@@ -58,6 +58,24 @@ A minimal, VIM-style music player built with Tauri and vanilla JavaScript.
 | `[` | Decrease speed (-0.25x) |
 | `\` | Reset speed to 1.0x |
 
+### A-B Loop
+| Key | Action |
+|-----|--------|
+| `b` | Set loop point A (start) |
+| `B` (Shift+b) | Set loop point B (end) |
+| `C` (Shift+c) | Clear loop |
+
+### Bookmarks
+| Key | Action |
+|-----|--------|
+| `m` + `a-z` | Set bookmark at current position |
+| `'` + `a-z` | Jump to bookmark |
+
+### Track Deletion
+| Key | Action |
+|-----|--------|
+| `dd` | Delete selected track(s) from playlist |
+
 ### Queue
 | Key | Action |
 |-----|--------|
@@ -137,7 +155,14 @@ Press `:` to enter command mode. Available commands:
 - `:playlists` or `:pl` - Open playlist manager
 - `:delplaylist <name>` or `:dp <name>` - Delete a playlist
 - `:sleep <minutes>` - Set sleep timer (0 to cancel)
+- `:sleep +<minutes>` - Add time to existing timer
+- `:sleep -<minutes>` - Subtract time from timer
 - `:sleep` - Show remaining sleep timer
+- `:mark <a-z>` - Set bookmark at current position
+- `:marks` - Show all bookmarks
+- `:delmark <a-z>` - Delete a bookmark
+- `:<line>d` - Delete track at line number (e.g., `:5d`)
+- `:<start>,<end>d` - Delete range of tracks (e.g., `:10,20d`)
 - `:help` or `:h` - Show help
 - `:quit` or `:q` - Quit application
 

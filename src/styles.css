@@ -71,7 +71,8 @@ body {
 }
 
 .speed-indicator,
-.sleep-timer-indicator {
+.sleep-timer-indicator,
+.loop-indicator {
     font-size: 0.75rem;
     font-weight: 600;
     color: var(--text-muted);
@@ -86,6 +87,11 @@ body {
 .sleep-timer-indicator.active {
     display: inline;
     color: var(--warning);
+}
+
+.loop-indicator.active {
+    display: inline;
+    color: var(--success);
 }
 
 .main {
