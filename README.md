@@ -35,7 +35,7 @@ A minimal, VIM-style music player built with Tauri and vanilla JavaScript.
 |-----|--------|
 | `+` / `=` | Volume up |
 | `-` | Volume down |
-| `m` | Mute/Unmute |
+| `M` (Shift+m) | Mute/Unmute |
 
 ### Seeking
 | Key | Action |

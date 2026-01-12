@@ -254,7 +254,7 @@ function handleKeyDown(e) {
         case '-':
             adjustVolume(-0.05);
             break;
-        case 'm':
+        case 'M':
             toggleMute();
             break;
             
