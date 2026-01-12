@@ -107,6 +107,7 @@ A minimal, VIM-style music player built with Tauri and vanilla JavaScript.
 | Key | Action |
 |-----|--------|
 | `o` | Open folder |
+| `R` (Shift+r) | Reload folder content |
 | `Tab` | Toggle list/folder view |
 | `Backspace` | Go up folder (in folder view) |
 | `:` | Enter command mode |
@@ -154,6 +155,7 @@ Press `:` to enter command mode. Available commands:
 - `:load <name>` or `:e <name>` - Load a saved playlist
 - `:playlists` or `:pl` - Open playlist manager
 - `:delplaylist <name>` or `:dp <name>` - Delete a playlist
+- `:reload` or `:r` - Reload folder content
 - `:sleep <minutes>` - Set sleep timer (0 to cancel)
 - `:sleep +<minutes>` - Add time to existing timer
 - `:sleep -<minutes>` - Subtract time from timer

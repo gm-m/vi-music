@@ -347,6 +347,9 @@ function handleKeyDown(e) {
         case 'o':
             openFolder();
             break;
+        case 'R':
+            reloadContent();
+            break;
         case ':':
             e.preventDefault();
             enterCommandMode();
@@ -450,6 +453,10 @@ function executeCommand(cmd) {
         case 'open':
         case 'o':
             openFolder();
+            break;
+        case 'reload':
+        case 'r':
+            reloadContent();
             break;
         case 'play':
         case 'p':
@@ -2080,6 +2087,47 @@ async function loadFolder(path) {
         updateStatus(`Loaded ${tracks.length} tracks`);
     } catch (err) {
         console.error('Failed to load folder:', err);
+        updateStatus(`Error: ${err}`);
+    }
+}
+
+async function reloadContent() {
+    if (!state.rootFolder) {
+        updateStatus('No folder loaded');
+        return;
+    }
+    
+    const previousCount = state.playlist.length;
+    const currentlyPlaying = state.playingIndex >= 0 ? state.playlist[state.playingIndex]?.path : null;
+    
+    try {
+        updateStatus('Reloading...');
+        const tracks = await invoke('load_folder', { path: state.rootFolder });
+        state.playlist = tracks;
+        
+        // Try to restore playing index if track still exists
+        if (currentlyPlaying) {
+            const newIndex = tracks.findIndex(t => t.path === currentlyPlaying);
+            state.playingIndex = newIndex; // -1 if not found
+        }
+        
+        // Adjust selected index if needed
+        if (state.selectedIndex >= tracks.length) {
+            state.selectedIndex = Math.max(0, tracks.length - 1);
+        }
+        
+        // If in folder view, also reload folder contents
+        if (state.viewMode === 'folder') {
+            await loadFolderContents(state.currentFolder);
+        } else {
+            renderPlaylist();
+        }
+        
+        const diff = tracks.length - previousCount;
+        const diffText = diff > 0 ? ` (+${diff})` : diff < 0 ? ` (${diff})` : '';
+        updateStatus(`Reloaded: ${tracks.length} tracks${diffText}`);
+    } catch (err) {
+        console.error('Failed to reload:', err);
         updateStatus(`Error: ${err}`);
     }
 }
