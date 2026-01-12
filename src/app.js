@@ -12,6 +12,70 @@ if (window.__TAURI__) {
     listen = async () => () => {};
 }
 
+// Default keybindings - can be overridden by user config
+const defaultKeybindings = {
+    // Navigation
+    'j': 'moveDown',
+    'k': 'moveUp',
+    'g': 'pendingG',
+    'G': 'goToEnd',
+    'Ctrl+d': 'pageDown',
+    'Ctrl+u': 'pageUp',
+    // Playback
+    'Enter': 'playSelected',
+    'Space': 'togglePause',
+    's': 'stop',
+    'n': 'nextTrack',
+    'p': 'prevTrack',
+    // Volume
+    '+': 'volumeUp',
+    '=': 'volumeUp',
+    '-': 'volumeDown',
+    'M': 'toggleMute',
+    // Speed
+    ']': 'speedUp',
+    '[': 'speedDown',
+    '\\': 'speedReset',
+    // Seek
+    'l': 'seekForward',
+    'h': 'seekBackward',
+    'L': 'seekForwardLarge',
+    'H': 'seekBackwardLarge',
+    // Modes
+    ':': 'commandMode',
+    '/': 'filterMode',
+    'Escape': 'normalMode',
+    'v': 'visualMode',
+    // View
+    'Tab': 'toggleView',
+    // Repeat/Shuffle
+    'r': 'cycleRepeat',
+    'S': 'toggleShuffle',
+    // Queue
+    'a': 'addToQueue',
+    'q': 'toggleQueueView',
+    // Folder
+    'o': 'openFolder',
+    'R': 'reloadContent',
+    // Playlist
+    'P': 'openPlaylistManager',
+    'A': 'addToPlaylist',
+    // Help
+    '?': 'toggleHelp',
+    // Delete
+    'd': 'pendingD',
+    // Bookmarks
+    'm': 'pendingM',
+    "'": 'pendingQuote',
+    // A-B Loop
+    'b': 'setLoopA',
+    'B': 'setLoopB',
+    'C': 'clearLoop',
+};
+
+// User keybindings (loaded from config)
+let userKeybindings = {};
+
 // State
 const state = {
     playlist: [],
@@ -98,12 +162,140 @@ const elements = {
 
 // Initialize
 async function init() {
+    await loadKeybindings();
     updateVolumeDisplay();
     setupEventListeners();
     setupMediaControlListener();
     await refreshStatus();
     startProgressUpdater();
     await loadDefaultFolder();
+}
+
+// Load user keybindings from config
+async function loadKeybindings() {
+    try {
+        const json = await invoke('get_keybindings');
+        userKeybindings = JSON.parse(json);
+    } catch (err) {
+        console.error('Failed to load keybindings:', err);
+        userKeybindings = {};
+    }
+}
+
+// Get the action for a key, checking user overrides first
+function getKeyAction(key) {
+    return userKeybindings[key] ?? defaultKeybindings[key];
+}
+
+// Get the key for an action (for display purposes)
+function getKeyForAction(action) {
+    // Check user bindings first
+    for (const [key, act] of Object.entries(userKeybindings)) {
+        if (act === action) return key;
+    }
+    // Fall back to defaults
+    for (const [key, act] of Object.entries(defaultKeybindings)) {
+        if (act === action && !userKeybindings[key]) return key;
+    }
+    return null;
+}
+
+// Build key string from event (e.g., "Ctrl+k", "Shift+Enter")
+function getKeyString(e) {
+    let key = e.key;
+    // Normalize space
+    if (key === ' ') key = 'Space';
+    
+    let parts = [];
+    if (e.ctrlKey) parts.push('Ctrl');
+    if (e.altKey) parts.push('Alt');
+    if (e.metaKey) parts.push('Meta');
+    // Only add Shift for non-character keys or when combined with Ctrl/Alt
+    if (e.shiftKey && (parts.length > 0 || key.length > 1)) {
+        parts.push('Shift');
+    }
+    parts.push(key);
+    return parts.join('+');
+}
+
+// Execute an action by name
+function executeAction(action, e) {
+    switch (action) {
+        // Navigation
+        case 'moveDown': moveSelection(1); return true;
+        case 'moveUp': moveSelection(-1); return true;
+        case 'pendingG': state.pendingKey = 'g'; return true;
+        case 'goToEnd': goToBottom(); return true;
+        case 'goToTop': goToTop(); return true;
+        case 'pageDown': e?.preventDefault(); moveSelection(10); return true;
+        case 'pageUp': e?.preventDefault(); moveSelection(-10); return true;
+        
+        // Playback
+        case 'playSelected': playSelected(); return true;
+        case 'togglePause': e?.preventDefault(); togglePause(); return true;
+        case 'stop': stop(); return true;
+        case 'nextTrack': nextTrack(); return true;
+        case 'prevTrack': prevTrack(); return true;
+        
+        // Volume
+        case 'volumeUp': adjustVolume(0.05); return true;
+        case 'volumeDown': adjustVolume(-0.05); return true;
+        case 'toggleMute': toggleMute(); return true;
+        
+        // Speed
+        case 'speedUp': changeSpeed(0.25); return true;
+        case 'speedDown': changeSpeed(-0.25); return true;
+        case 'speedReset': resetSpeed(); return true;
+        
+        // Seek
+        case 'seekForward': seekRelative(5); return true;
+        case 'seekBackward': seekRelative(-5); return true;
+        case 'seekForwardLarge': seekRelative(30); return true;
+        case 'seekBackwardLarge': seekRelative(-30); return true;
+        
+        // Modes
+        case 'commandMode': e?.preventDefault(); enterCommandMode(); return true;
+        case 'filterMode': e?.preventDefault(); enterFilterMode(); return true;
+        case 'normalMode':
+            if (state.filterText) clearFilter();
+            else closeModals();
+            return true;
+        case 'visualMode': enterVisualMode(); return true;
+        
+        // View
+        case 'toggleView': e?.preventDefault(); toggleViewMode(); return true;
+        
+        // Repeat/Shuffle
+        case 'cycleRepeat': toggleRepeat(); return true;
+        case 'toggleShuffle': toggleShuffle(); return true;
+        
+        // Queue
+        case 'addToQueue': addToQueue(); return true;
+        case 'toggleQueueView': toggleQueueView(); return true;
+        
+        // Folder
+        case 'openFolder': openFolder(); return true;
+        case 'reloadContent': reloadContent(); return true;
+        
+        // Playlist
+        case 'openPlaylistManager': showPlaylistManager(); return true;
+        case 'addToPlaylist': showAddToPlaylistPicker(getSelectedTrackPaths()); return true;
+        
+        // Help
+        case 'toggleHelp': toggleHelp(); return true;
+        
+        // Pending keys
+        case 'pendingD': state.pendingKey = 'd'; return true;
+        case 'pendingM': state.pendingKey = 'm'; return true;
+        case 'pendingQuote': state.pendingKey = "'"; return true;
+        
+        // A-B Loop
+        case 'setLoopA': setLoopA(); return true;
+        case 'setLoopB': setLoopB(); return true;
+        case 'clearLoop': clearLoop(); return true;
+        
+        default: return false;
+    }
 }
 
 // Listen for media control events from backend
@@ -249,173 +441,31 @@ function handleKeyDown(e) {
         return;
     }
     
+    // Try configurable keybindings first
+    const keyString = getKeyString(e);
+    const action = getKeyAction(keyString);
+    if (action && executeAction(action, e)) {
+        return;
+    }
+    
+    // Also try just the key for simple bindings
+    const simpleAction = getKeyAction(e.key);
+    if (simpleAction && executeAction(simpleAction, e)) {
+        return;
+    }
+    
+    // Handle remaining hardcoded keys that aren't easily configurable
     switch (e.key) {
-        // Navigation
-        case 'j':
-            if (e.shiftKey) {
-                nextTrack();
-            } else {
-                moveSelection(1);
-            }
-            break;
-        case 'k':
-            if (e.shiftKey) {
-                prevTrack();
-            } else {
-                moveSelection(-1);
-            }
-            break;
-        case 'g':
-            state.pendingKey = 'g';
-            break;
-        case 'G':
-            goToBottom();
-            break;
-            
-        // Playback
-        case 'Enter':
-            playSelected();
-            break;
-        case ' ':
-            e.preventDefault();
-            togglePause();
-            break;
-        case 's':
-            stop();
-            break;
-            
-        // Volume
-        case '+':
-        case '=':
-            adjustVolume(0.05);
-            break;
-        case '-':
-            adjustVolume(-0.05);
-            break;
-        case 'M':
-            toggleMute();
-            break;
-            
-        // Seeking
-        case 'l':
-            seekRelative(5);
-            break;
-        case 'h':
-            seekRelative(-5);
-            break;
-        case 'L':
-            seekRelative(30);
-            break;
-        case 'H':
-            seekRelative(-30);
-            break;
-        
-        // Repeat & Shuffle
-        case 'r':
-            toggleRepeat();
-            break;
-        case 'S':
-            toggleShuffle();
-            break;
-        
-        // Speed
-        case ']':
-            changeSpeed(0.25);
-            break;
-        case '[':
-            changeSpeed(-0.25);
-            break;
-        case '\\':
-            resetSpeed();
-            break;
-        
-        // A-B Loop
-        case 'b':
-            if (e.shiftKey) {
-                setLoopB();
-            } else {
-                setLoopA();
-            }
-            break;
-        case 'B':
-            setLoopB();
-            break;
-        case 'c':
-            if (e.shiftKey) {
-                clearLoop();
-            }
-            break;
-        case 'C':
-            clearLoop();
-            break;
-        
-        // Queue
-        case 'a':
-            addToQueue();
-            break;
-        case 'A':
-            addToQueueAndPlay();
-            break;
-        case 'q':
-            toggleQueueView();
-            break;
-        case 'd':
-            state.pendingKey = 'd';
-            break;
-        case 'v':
-            enterVisualMode();
-            break;
-        case 'p':
-            showAddToPlaylistPicker(getSelectedTrackPaths());
-            break;
-        case "'":
-            state.pendingKey = "'";
-            break;
-        case 'm':
-            if (!e.shiftKey) {
-                state.pendingKey = 'm';
-            }
-            break;
-            
-        // General
-        case 'Tab':
-            e.preventDefault();
-            toggleViewMode();
-            break;
-        case 'o':
-            openFolder();
-            break;
-        case 'R':
-            reloadContent();
-            break;
-        case ':':
-            e.preventDefault();
-            enterCommandMode();
-            break;
-        case '/':
-            e.preventDefault();
-            enterFilterMode();
-            break;
         case 'n':
             jumpToNextMatch();
             break;
         case 'N':
             jumpToPrevMatch();
             break;
-        case '?':
-            toggleHelp();
-            break;
         case 'Backspace':
             if (state.viewMode === 'folder') {
                 e.preventDefault();
                 navigateFolderUp();
-            }
-            break;
-        case 'Escape':
-            if (state.filterText) {
-                clearFilter();
-            } else {
-                closeModals();
             }
             break;
     }

@@ -480,12 +480,7 @@ impl AppState {
                 } else {
                     MediaPlayback::Playing { progress: None }
                 };
-                match mc.set_playback(playback.clone()) {
-                    Ok(_) => println!("Media playback set: playing={}, paused={}", playing, paused),
-                    Err(e) => println!("Failed to set media playback: {:?}", e),
-                }
-            } else {
-                println!("Media controls not available for playback update");
+                let _ = mc.set_playback(playback);
             }
         }
     }
@@ -493,18 +488,13 @@ impl AppState {
     fn update_media_metadata(&self, title: &str, duration: Option<u64>) {
         if let Ok(mut controls) = self.media_controls.lock() {
             if let Some(ref mut mc) = *controls {
-                match mc.set_metadata(MediaMetadata {
+                let _ = mc.set_metadata(MediaMetadata {
                     title: Some(title),
                     artist: Some("VI Music"),
                     album: None,
                     cover_url: None,
                     duration: duration.map(|d| std::time::Duration::from_secs(d)),
-                }) {
-                    Ok(_) => println!("Media metadata set: {}", title),
-                    Err(e) => println!("Failed to set media metadata: {:?}", e),
-                }
-            } else {
-                println!("Media controls not available for metadata update");
+                });
             }
         }
     }
@@ -1088,6 +1078,32 @@ fn sanitize_filename(name: &str) -> String {
         .collect()
 }
 
+fn get_config_dir() -> Option<PathBuf> {
+    dirs::config_dir().map(|p| p.join("vi-music"))
+}
+
+#[tauri::command]
+fn get_keybindings() -> Result<String, String> {
+    let config_dir = get_config_dir().ok_or("Could not determine config directory")?;
+    let path = config_dir.join("keybindings.json");
+    
+    if path.exists() {
+        fs::read_to_string(&path).map_err(|e| e.to_string())
+    } else {
+        Ok("{}".to_string())
+    }
+}
+
+#[tauri::command]
+fn save_keybindings(keybindings: String) -> Result<(), String> {
+    let config_dir = get_config_dir().ok_or("Could not determine config directory")?;
+    fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
+    
+    let path = config_dir.join("keybindings.json");
+    fs::write(&path, keybindings).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 fn main() {
     let app_state = AppState::new();
     
@@ -1115,6 +1131,8 @@ fn main() {
             delete_playlist,
             create_playlist,
             add_tracks_to_playlist,
+            get_keybindings,
+            save_keybindings,
         ])
         .setup(|app| {
             // Initialize media controls
@@ -1137,50 +1155,38 @@ fn main() {
             
             match MediaControls::new(config) {
                 Ok(mut controls) => {
-                    println!("Media controls initialized successfully");
-                    
                     let state = app.state::<AppState>();
                     let app_handle = app.handle();
                     
                     // Set up event handler for media control events
-                    if let Err(e) = controls.attach(move |event: MediaControlEvent| {
+                    let _ = controls.attach(move |event: MediaControlEvent| {
                         match event {
                             MediaControlEvent::Play => {
-                                println!("Media control: Play/Resume");
                                 let _ = app_handle.emit_all("media-control", "play");
                             }
                             MediaControlEvent::Pause => {
-                                println!("Media control: Pause");
                                 let _ = app_handle.emit_all("media-control", "pause");
                             }
                             MediaControlEvent::Toggle => {
-                                println!("Media control: Toggle");
                                 let _ = app_handle.emit_all("media-control", "toggle");
                             }
                             MediaControlEvent::Next => {
-                                println!("Media control: Next");
                                 let _ = app_handle.emit_all("media-control", "next");
                             }
                             MediaControlEvent::Previous => {
-                                println!("Media control: Previous");
                                 let _ = app_handle.emit_all("media-control", "prev");
                             }
                             MediaControlEvent::Stop => {
-                                println!("Media control: Stop");
                                 let _ = app_handle.emit_all("media-control", "stop");
                             }
                             _ => {}
                         }
-                    }) {
-                        println!("Failed to attach media control handler: {:?}", e);
-                    }
+                    });
                     
                     // Store controls in app state
                     *state.media_controls.lock().unwrap() = Some(controls);
                 }
-                Err(e) => {
-                    println!("Failed to initialize media controls: {:?}", e);
-                }
+                Err(_) => {}
             }
             
             Ok(())
