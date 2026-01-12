@@ -614,8 +614,47 @@ body {
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 32px;
-    max-width: 600px;
+    max-width: 700px;
+    max-height: 80vh;
     width: 90%;
+    overflow-y: auto;
+}
+
+.help-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+    justify-content: center;
+}
+
+.help-tab {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 20px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.help-tab:hover {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.help-tab.active {
+    background: var(--accent);
+    color: var(--bg-primary);
+    border-color: var(--accent);
+}
+
+.help-tab-content {
+    display: none;
+}
+
+.help-tab-content.active {
+    display: block;
 }
 
 .help-content h2 {

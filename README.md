@@ -156,6 +156,7 @@ Press `:` to enter command mode. Available commands:
 - `:playlists` or `:pl` - Open playlist manager
 - `:delplaylist <name>` or `:dp <name>` - Delete a playlist
 - `:reload` or `:r` - Reload folder content
+- `:jump <0-100>` or `:j <0-100>` - Jump to percentage of track
 - `:sleep <minutes>` - Set sleep timer (0 to cancel)
 - `:sleep +<minutes>` - Add time to existing timer
 - `:sleep -<minutes>` - Subtract time from timer

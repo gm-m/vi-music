@@ -166,6 +166,7 @@ async function init() {
     updateVolumeDisplay();
     setupEventListeners();
     setupMediaControlListener();
+    setupHelpTabs();
     await refreshStatus();
     startProgressUpdater();
     await loadDefaultFolder();
@@ -441,7 +442,19 @@ function handleKeyDown(e) {
         return;
     }
     
-    // Try configurable keybindings first
+    // Handle filter navigation first (n/N for next/prev match when filter is active)
+    if (state.filterText) {
+        if (e.key === 'n') {
+            jumpToNextMatch();
+            return;
+        }
+        if (e.key === 'N') {
+            jumpToPrevMatch();
+            return;
+        }
+    }
+    
+    // Try configurable keybindings
     const keyString = getKeyString(e);
     const action = getKeyAction(keyString);
     if (action && executeAction(action, e)) {
@@ -454,14 +467,8 @@ function handleKeyDown(e) {
         return;
     }
     
-    // Handle remaining hardcoded keys that aren't easily configurable
+    // Handle remaining hardcoded keys
     switch (e.key) {
-        case 'n':
-            jumpToNextMatch();
-            break;
-        case 'N':
-            jumpToPrevMatch();
-            break;
         case 'Backspace':
             if (state.viewMode === 'folder') {
                 e.preventDefault();
@@ -2521,6 +2528,25 @@ async function refreshStatus() {
 // Help Modal
 function toggleHelp() {
     elements.helpModal.classList.toggle('visible');
+}
+
+function setupHelpTabs() {
+    const tabs = document.querySelectorAll('.help-tab');
+    const contents = document.querySelectorAll('.help-tab-content');
+    
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const targetTab = tab.dataset.tab;
+            
+            // Update active tab
+            tabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            
+            // Update active content
+            contents.forEach(c => c.classList.remove('active'));
+            document.getElementById(`help-${targetTab}`).classList.add('active');
+        });
+    });
 }
 
 function closeModals() {
