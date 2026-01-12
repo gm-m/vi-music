@@ -661,6 +661,19 @@ function executeCommand(cmd) {
                 updateStatus('Usage: :delmark <a-z>');
             }
             break;
+        case 'jump':
+        case 'j':
+            if (parts[1]) {
+                const percent = parseInt(parts[1].replace('%', ''));
+                if (!isNaN(percent) && percent >= 0 && percent <= 100) {
+                    jumpToPercent(percent);
+                } else {
+                    updateStatus('Usage: :jump <0-100> (percentage)');
+                }
+            } else {
+                updateStatus('Usage: :jump <0-100> (percentage)');
+            }
+            break;
     }
 }
 
@@ -1314,6 +1327,17 @@ async function seekTo(position) {
     } catch (err) {
         // Ignore if not playing
     }
+}
+
+// Jump to percentage of track
+function jumpToPercent(percent) {
+    if (!state.isPlaying || !state.duration) {
+        updateStatus('No track playing');
+        return;
+    }
+    const position = Math.floor((percent / 100) * state.duration);
+    seekTo(position);
+    updateStatus(`Jumped to ${percent}%`);
 }
 
 // Sleep Timer
