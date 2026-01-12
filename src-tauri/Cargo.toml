@@ -19,6 +19,7 @@ symphonia = { version = "0.5", features = ["flac"] }
 mp3-duration = "0.1"
 walkdir = "2.4"
 dirs = "5.0"
+souvlaki = "0.7"
 
 [features]
 default = ["custom-protocol"]

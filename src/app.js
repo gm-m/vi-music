@@ -1,13 +1,15 @@
 // Wait for Tauri to be ready
-let invoke, open;
+let invoke, open, listen;
 
 if (window.__TAURI__) {
     invoke = window.__TAURI__.tauri?.invoke || window.__TAURI__.invoke;
     open = window.__TAURI__.dialog?.open;
+    listen = window.__TAURI__.event?.listen;
 } else {
     console.warn('Tauri API not available');
     invoke = async () => { throw new Error('Tauri not available'); };
     open = async () => null;
+    listen = async () => () => {};
 }
 
 // State
@@ -98,9 +100,45 @@ const elements = {
 async function init() {
     updateVolumeDisplay();
     setupEventListeners();
+    setupMediaControlListener();
     await refreshStatus();
     startProgressUpdater();
     await loadDefaultFolder();
+}
+
+// Listen for media control events from backend
+async function setupMediaControlListener() {
+    if (!listen) return;
+    
+    await listen('media-control', (event) => {
+        console.log('Media control event:', event.payload);
+        switch (event.payload) {
+            case 'play':
+                if (state.isPaused) {
+                    togglePause();
+                } else if (!state.isPlaying && state.playlist.length > 0) {
+                    playTrack(state.selectedIndex);
+                }
+                break;
+            case 'pause':
+                if (state.isPlaying && !state.isPaused) {
+                    togglePause();
+                }
+                break;
+            case 'toggle':
+                togglePause();
+                break;
+            case 'next':
+                nextTrack();
+                break;
+            case 'prev':
+                prevTrack();
+                break;
+            case 'stop':
+                stop();
+                break;
+        }
+    });
 }
 
 async function loadDefaultFolder() {

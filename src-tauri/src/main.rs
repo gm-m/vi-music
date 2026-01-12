@@ -10,8 +10,9 @@ use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
-use tauri::State;
+use tauri::{Manager, State};
 use walkdir::WalkDir;
+use souvlaki::{MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, PlatformConfig};
 
 // Symphonia imports for fast FLAC seeking
 use symphonia::core::audio::SampleBuffer;
@@ -243,7 +244,7 @@ impl rodio::Source for SymphoniaFlacSource {
 }
 
 struct AudioPlayer {
-    command_tx: Sender<AudioCommand>,
+    pub command_tx: Sender<AudioCommand>,
     playback_state: Arc<Mutex<PlaybackState>>,
 }
 
@@ -451,6 +452,7 @@ struct AppState {
     volume: Mutex<f32>,
     is_playing: Mutex<bool>,
     is_paused: Mutex<bool>,
+    media_controls: Mutex<Option<MediaControls>>,
 }
 
 impl AppState {
@@ -464,6 +466,46 @@ impl AppState {
             volume: Mutex::new(1.0),
             is_playing: Mutex::new(false),
             is_paused: Mutex::new(false),
+            media_controls: Mutex::new(None),
+        }
+    }
+    
+    fn update_media_playback(&self, playing: bool, paused: bool) {
+        if let Ok(mut controls) = self.media_controls.lock() {
+            if let Some(ref mut mc) = *controls {
+                let playback = if !playing {
+                    MediaPlayback::Stopped
+                } else if paused {
+                    MediaPlayback::Paused { progress: None }
+                } else {
+                    MediaPlayback::Playing { progress: None }
+                };
+                match mc.set_playback(playback.clone()) {
+                    Ok(_) => println!("Media playback set: playing={}, paused={}", playing, paused),
+                    Err(e) => println!("Failed to set media playback: {:?}", e),
+                }
+            } else {
+                println!("Media controls not available for playback update");
+            }
+        }
+    }
+    
+    fn update_media_metadata(&self, title: &str, duration: Option<u64>) {
+        if let Ok(mut controls) = self.media_controls.lock() {
+            if let Some(ref mut mc) = *controls {
+                match mc.set_metadata(MediaMetadata {
+                    title: Some(title),
+                    artist: Some("VI Music"),
+                    album: None,
+                    cover_url: None,
+                    duration: duration.map(|d| std::time::Duration::from_secs(d)),
+                }) {
+                    Ok(_) => println!("Media metadata set: {}", title),
+                    Err(e) => println!("Failed to set media metadata: {:?}", e),
+                }
+            } else {
+                println!("Media controls not available for metadata update");
+            }
         }
     }
 }
@@ -645,7 +687,7 @@ fn count_audio_files(path: &PathBuf) -> usize {
 }
 
 #[tauri::command]
-fn play_track(index: usize, state: State<AppState>) -> Result<TrackInfo, String> {
+fn play_track(index: usize, skip_secs: Option<u64>, state: State<AppState>) -> Result<TrackInfo, String> {
     let playlist = state.playlist.lock().unwrap();
     
     if index >= playlist.len() {
@@ -659,7 +701,8 @@ fn play_track(index: usize, state: State<AppState>) -> Result<TrackInfo, String>
     *state.current_duration.lock().unwrap() = duration;
     
     let volume = *state.volume.lock().unwrap();
-    state.player.send(AudioCommand::Play(path.clone(), volume, 0));
+    let skip = skip_secs.unwrap_or(0);
+    state.player.send(AudioCommand::Play(path.clone(), volume, skip));
     
     *state.current_index.lock().unwrap() = index;
     *state.is_playing.lock().unwrap() = true;
@@ -671,6 +714,10 @@ fn play_track(index: usize, state: State<AppState>) -> Result<TrackInfo, String>
         .unwrap_or_default();
     
     *state.current_track.lock().unwrap() = Some(name.clone());
+    
+    // Update media controls
+    state.update_media_metadata(&name, duration);
+    state.update_media_playback(true, false);
     
     Ok(TrackInfo {
         path,
@@ -691,10 +738,14 @@ fn toggle_pause(state: State<AppState>) -> Result<bool, String> {
     if *is_paused {
         state.player.send(AudioCommand::Resume);
         *is_paused = false;
+        drop(is_paused);
+        state.update_media_playback(true, false);
         Ok(false)
     } else {
         state.player.send(AudioCommand::Pause);
         *is_paused = true;
+        drop(is_paused);
+        state.update_media_playback(true, true);
         Ok(true)
     }
 }
@@ -705,6 +756,7 @@ fn stop(state: State<AppState>) -> Result<(), String> {
     *state.is_playing.lock().unwrap() = false;
     *state.is_paused.lock().unwrap() = false;
     *state.current_track.lock().unwrap() = None;
+    state.update_media_playback(false, false);
     Ok(())
 }
 
@@ -738,6 +790,10 @@ fn next_track(state: State<AppState>) -> Result<TrackInfo, String> {
         .unwrap_or_default();
     
     *state.current_track.lock().unwrap() = Some(name.clone());
+    
+    // Update media controls
+    state.update_media_metadata(&name, duration);
+    state.update_media_playback(true, false);
     
     Ok(TrackInfo {
         path,
@@ -777,6 +833,10 @@ fn prev_track(state: State<AppState>) -> Result<TrackInfo, String> {
         .unwrap_or_default();
     
     *state.current_track.lock().unwrap() = Some(name.clone());
+    
+    // Update media controls
+    state.update_media_metadata(&name, duration);
+    state.update_media_playback(true, false);
     
     Ok(TrackInfo {
         path,
@@ -1029,8 +1089,10 @@ fn sanitize_filename(name: &str) -> String {
 }
 
 fn main() {
+    let app_state = AppState::new();
+    
     tauri::Builder::default()
-        .manage(AppState::new())
+        .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             load_folder,
             browse_folder,
@@ -1054,6 +1116,75 @@ fn main() {
             create_playlist,
             add_tracks_to_playlist,
         ])
+        .setup(|app| {
+            // Initialize media controls
+            let window = app.get_window("main").expect("main window not found");
+            
+            #[cfg(target_os = "windows")]
+            let hwnd = {
+                let hwnd = window.hwnd().expect("failed to get window handle");
+                Some(hwnd.0 as *mut std::ffi::c_void)
+            };
+            
+            #[cfg(not(target_os = "windows"))]
+            let hwnd: Option<*mut std::ffi::c_void> = None;
+            
+            let config = PlatformConfig {
+                dbus_name: "vi_music",
+                display_name: "VI Music",
+                hwnd,
+            };
+            
+            match MediaControls::new(config) {
+                Ok(mut controls) => {
+                    println!("Media controls initialized successfully");
+                    
+                    let state = app.state::<AppState>();
+                    let app_handle = app.handle();
+                    
+                    // Set up event handler for media control events
+                    if let Err(e) = controls.attach(move |event: MediaControlEvent| {
+                        match event {
+                            MediaControlEvent::Play => {
+                                println!("Media control: Play/Resume");
+                                let _ = app_handle.emit_all("media-control", "play");
+                            }
+                            MediaControlEvent::Pause => {
+                                println!("Media control: Pause");
+                                let _ = app_handle.emit_all("media-control", "pause");
+                            }
+                            MediaControlEvent::Toggle => {
+                                println!("Media control: Toggle");
+                                let _ = app_handle.emit_all("media-control", "toggle");
+                            }
+                            MediaControlEvent::Next => {
+                                println!("Media control: Next");
+                                let _ = app_handle.emit_all("media-control", "next");
+                            }
+                            MediaControlEvent::Previous => {
+                                println!("Media control: Previous");
+                                let _ = app_handle.emit_all("media-control", "prev");
+                            }
+                            MediaControlEvent::Stop => {
+                                println!("Media control: Stop");
+                                let _ = app_handle.emit_all("media-control", "stop");
+                            }
+                            _ => {}
+                        }
+                    }) {
+                        println!("Failed to attach media control handler: {:?}", e);
+                    }
+                    
+                    // Store controls in app state
+                    *state.media_controls.lock().unwrap() = Some(controls);
+                }
+                Err(e) => {
+                    println!("Failed to initialize media controls: {:?}", e);
+                }
+            }
+            
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
