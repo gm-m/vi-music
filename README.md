@@ -157,6 +157,10 @@ Press `:` to enter command mode. Available commands:
 - `:delplaylist <name>` or `:dp <name>` - Delete a playlist
 - `:reload` or `:r` - Reload folder content
 - `:jump <0-100>` or `:j <0-100>` - Jump to percentage of track
+- `:addlib` or `:al` - Add folder to music library
+- `:libs` or `:library` - Show library folders
+- `:removelib <n>` or `:rl <n>` - Remove library folder by number
+- `:scanlib` or `:scan` - Scan all library folders (recursive)
 - `:sleep <minutes>` - Set sleep timer (0 to cancel)
 - `:sleep +<minutes>` - Add time to existing timer
 - `:sleep -<minutes>` - Subtract time from timer

@@ -158,6 +158,8 @@ const elements = {
     speedIndicator: document.getElementById('speedIndicator'),
     sleepTimerIndicator: document.getElementById('sleepTimerIndicator'),
     loopIndicator: document.getElementById('loopIndicator'),
+    loadingOverlay: document.getElementById('loadingOverlay'),
+    loadingText: document.getElementById('loadingText'),
 };
 
 // Initialize
@@ -681,6 +683,34 @@ function executeCommand(cmd) {
                 updateStatus('Usage: :jump <0-100> (percentage)');
             }
             break;
+        case 'addlib':
+        case 'al':
+            addLibraryFolder();
+            break;
+        case 'libs':
+        case 'library':
+            showLibraryFolders();
+            break;
+        case 'removelib':
+        case 'rl':
+            if (parts[1]) {
+                const index = parseInt(parts[1]) - 1;
+                getLibraryFolders().then(folders => {
+                    if (index >= 0 && index < folders.length) {
+                        removeLibraryFolder(folders[index]);
+                    } else {
+                        updateStatus('Invalid folder number. Use :libs to see folders');
+                    }
+                });
+            } else {
+                updateStatus('Usage: :removelib <number> (use :libs to see folders)');
+            }
+            break;
+        case 'scanlib':
+        case 'scan':
+        case 'sl':
+            scanLibrary();
+            break;
     }
 }
 
@@ -708,6 +738,118 @@ async function clearDefaultFolder() {
         updateStatus('Default folder cleared');
     } catch (err) {
         console.error('Failed to clear default folder:', err);
+    }
+}
+
+// Loading indicator
+function showLoading(text = 'Loading...') {
+    elements.loadingText.textContent = text;
+    elements.loadingOverlay.style.display = 'flex';
+}
+
+function hideLoading() {
+    elements.loadingOverlay.style.display = 'none';
+}
+
+// Library Management
+async function getLibraryFolders() {
+    try {
+        return await invoke('get_library_folders');
+    } catch (err) {
+        console.error('Failed to get library folders:', err);
+        return [];
+    }
+}
+
+async function addLibraryFolder() {
+    try {
+        const selected = await open({
+            directory: true,
+            multiple: false,
+            title: 'Add Library Folder'
+        });
+        
+        if (selected) {
+            const folders = await invoke('add_library_folder', { folder: selected });
+            updateStatus(`Library folder added (${folders.length} total)`);
+            return folders;
+        }
+    } catch (err) {
+        console.error('Failed to add library folder:', err);
+    }
+    return null;
+}
+
+async function removeLibraryFolder(folder) {
+    try {
+        const folders = await invoke('remove_library_folder', { folder });
+        updateStatus(`Library folder removed (${folders.length} remaining)`);
+        return folders;
+    } catch (err) {
+        console.error('Failed to remove library folder:', err);
+        return [];
+    }
+}
+
+async function scanLibrary() {
+    try {
+        const folders = await getLibraryFolders();
+        if (folders.length === 0) {
+            updateStatus('No library folders. Use :addlib to add folders');
+            return;
+        }
+        
+        showLoading(`Scanning ${folders.length} folder${folders.length > 1 ? 's' : ''}...`);
+        
+        let allTracks = [];
+        for (let i = 0; i < folders.length; i++) {
+            elements.loadingText.textContent = `Scanning folder ${i + 1}/${folders.length}...`;
+            try {
+                const tracks = await invoke('scan_library_folder', { folder: folders[i] });
+                allTracks = allTracks.concat(tracks);
+            } catch (err) {
+                console.warn(`Failed to scan ${folders[i]}:`, err);
+            }
+        }
+        
+        hideLoading();
+        
+        // Remove duplicates by path
+        const seen = new Set();
+        allTracks = allTracks.filter(track => {
+            if (seen.has(track.path)) return false;
+            seen.add(track.path);
+            return true;
+        });
+        
+        // Sort by name and update indices
+        allTracks.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+        allTracks.forEach((track, i) => track.index = i);
+        
+        // Update backend playlist with the paths
+        const paths = allTracks.map(t => t.path);
+        await invoke('set_playlist', { paths });
+        
+        state.playlist = allTracks;
+        state.selectedIndex = 0;
+        state.viewMode = 'list';
+        state.rootFolder = 'Library';
+        renderPlaylist();
+        updateStatus(`Library: ${allTracks.length} tracks from ${folders.length} folder${folders.length > 1 ? 's' : ''}`);
+    } catch (err) {
+        hideLoading();
+        console.error('Failed to scan library:', err);
+        updateStatus('Failed to scan library');
+    }
+}
+
+async function showLibraryFolders() {
+    const folders = await getLibraryFolders();
+    if (folders.length === 0) {
+        updateStatus('No library folders. Use :addlib to add folders');
+    } else {
+        const list = folders.map((f, i) => `${i + 1}. ${f}`).join('\n');
+        updateStatus(`Library folders:\n${list}`);
     }
 }
 
@@ -2213,6 +2355,12 @@ async function loadFolder(path) {
 async function reloadContent() {
     if (!state.rootFolder) {
         updateStatus('No folder loaded');
+        return;
+    }
+    
+    // If in library mode, rescan the library
+    if (state.rootFolder === 'Library') {
+        await scanLibrary();
         return;
     }
     

@@ -1104,6 +1104,106 @@ fn save_keybindings(keybindings: String) -> Result<(), String> {
     Ok(())
 }
 
+// Library folder management
+#[tauri::command]
+fn get_library_folders() -> Result<Vec<String>, String> {
+    let config_dir = get_config_dir().ok_or("Could not determine config directory")?;
+    let path = config_dir.join("library_folders.json");
+    
+    if path.exists() {
+        let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        serde_json::from_str(&content).map_err(|e| e.to_string())
+    } else {
+        Ok(Vec::new())
+    }
+}
+
+#[tauri::command]
+fn add_library_folder(folder: String) -> Result<Vec<String>, String> {
+    let config_dir = get_config_dir().ok_or("Could not determine config directory")?;
+    fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
+    
+    let path = config_dir.join("library_folders.json");
+    let mut folders: Vec<String> = if path.exists() {
+        let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        serde_json::from_str(&content).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    
+    if !folders.contains(&folder) {
+        folders.push(folder);
+        let content = serde_json::to_string_pretty(&folders).map_err(|e| e.to_string())?;
+        fs::write(&path, content).map_err(|e| e.to_string())?;
+    }
+    
+    Ok(folders)
+}
+
+#[tauri::command]
+fn remove_library_folder(folder: String) -> Result<Vec<String>, String> {
+    let config_dir = get_config_dir().ok_or("Could not determine config directory")?;
+    let path = config_dir.join("library_folders.json");
+    
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    
+    let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let mut folders: Vec<String> = serde_json::from_str(&content).unwrap_or_default();
+    folders.retain(|f| f != &folder);
+    
+    let content = serde_json::to_string_pretty(&folders).map_err(|e| e.to_string())?;
+    fs::write(&path, content).map_err(|e| e.to_string())?;
+    
+    Ok(folders)
+}
+
+#[tauri::command]
+fn scan_library_folder(folder: String) -> Result<Vec<TrackInfo>, String> {
+    let path = PathBuf::from(&folder);
+    if !path.exists() || !path.is_dir() {
+        return Err(format!("Folder not found: {}", folder));
+    }
+    
+    let mut tracks = Vec::new();
+    scan_folder_recursive(&path, &mut tracks);
+    
+    tracks.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    Ok(tracks)
+}
+
+#[tauri::command]
+fn set_playlist(paths: Vec<String>, state: State<AppState>) {
+    let mut playlist = state.playlist.lock().unwrap();
+    *playlist = paths;
+}
+
+fn scan_folder_recursive(dir: &PathBuf, tracks: &mut Vec<TrackInfo>) {
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.is_dir() {
+                scan_folder_recursive(&path, tracks);
+            } else if let Some(ext) = path.extension() {
+                let ext_lower = ext.to_string_lossy().to_lowercase();
+                if ext_lower == "mp3" || ext_lower == "flac" || ext_lower == "wav" || ext_lower == "ogg" || ext_lower == "m4a" {
+                    if let Some(name) = path.file_name() {
+                        let path_str = path.to_string_lossy().to_string();
+                        let duration = get_audio_duration(&path_str);
+                        tracks.push(TrackInfo {
+                            name: name.to_string_lossy().to_string(),
+                            path: path_str,
+                            index: 0, // Will be set after sorting
+                            duration,
+                        });
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn main() {
     let app_state = AppState::new();
     
@@ -1133,6 +1233,11 @@ fn main() {
             add_tracks_to_playlist,
             get_keybindings,
             save_keybindings,
+            get_library_folders,
+            add_library_folder,
+            remove_library_folder,
+            scan_library_folder,
+            set_playlist,
         ])
         .setup(|app| {
             // Initialize media controls
