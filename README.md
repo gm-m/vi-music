@@ -161,6 +161,7 @@ Press `:` to enter command mode. Available commands:
 - `:libs` or `:library` - Show library folders
 - `:removelib <n>` or `:rl <n>` - Remove library folder by number
 - `:scanlib` or `:scan` - Scan all library folders (recursive)
+- `:back` or `:b` - Go back to previous folder/library
 - `:sleep <minutes>` - Set sleep timer (0 to cancel)
 - `:sleep +<minutes>` - Add time to existing timer
 - `:sleep -<minutes>` - Subtract time from timer

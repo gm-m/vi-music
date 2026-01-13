@@ -105,6 +105,7 @@ const state = {
     viewMode: 'list', // 'list' | 'folder'
     rootFolder: null,
     currentFolder: null,
+    previousRootFolder: null, // For going back after loading playlist
     folderContents: [],
     folderSelectedIndex: 0,
     filteredFolderContents: [],
@@ -472,9 +473,11 @@ function handleKeyDown(e) {
     // Handle remaining hardcoded keys
     switch (e.key) {
         case 'Backspace':
+            e.preventDefault();
             if (state.viewMode === 'folder') {
-                e.preventDefault();
                 navigateFolderUp();
+            } else {
+                goBack();
             }
             break;
     }
@@ -711,6 +714,10 @@ function executeCommand(cmd) {
         case 'sl':
             scanLibrary();
             break;
+        case 'back':
+        case 'b':
+            goBack();
+            break;
     }
 }
 
@@ -853,6 +860,22 @@ async function showLibraryFolders() {
     }
 }
 
+async function goBack() {
+    if (!state.previousRootFolder) {
+        updateStatus('No previous folder to go back to');
+        return;
+    }
+    
+    const previous = state.previousRootFolder;
+    state.previousRootFolder = state.rootFolder; // Allow going forward again
+    
+    if (previous === 'Library') {
+        await scanLibrary();
+    } else {
+        await loadFolder(previous);
+    }
+}
+
 // Playlist Management
 async function savePlaylist(name) {
     if (state.playlist.length === 0) {
@@ -882,11 +905,17 @@ async function loadSavedPlaylist(name) {
     try {
         updateStatus('Loading playlist...');
         const tracks = await invoke('load_playlist', { name });
+        
+        // Store previous folder for :back command
+        if (state.rootFolder) {
+            state.previousRootFolder = state.rootFolder;
+        }
+        
         state.playlist = tracks;
         state.selectedIndex = 0;
         state.playingIndex = -1;
         state.viewMode = 'list';
-        state.rootFolder = null;
+        state.rootFolder = `Playlist: ${name}`;
         renderPlaylist();
         updateStatus(`Loaded "${name}" (${tracks.length} tracks)`);
     } catch (err) {
