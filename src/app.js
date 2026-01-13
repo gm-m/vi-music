@@ -2610,17 +2610,26 @@ function applyFilter() {
         return;
     }
     
-    const query = state.filterText.toLowerCase();
+    // Try regex first, fall back to literal search if invalid
+    let matcher;
+    try {
+        const regex = new RegExp(state.filterText, 'i');
+        matcher = (text) => regex.test(text);
+    } catch (e) {
+        // Invalid regex, fall back to literal search
+        const query = state.filterText.toLowerCase();
+        matcher = (text) => text.toLowerCase().includes(query);
+    }
     
     if (state.viewMode === 'folder') {
         state.filteredFolderContents = state.folderContents
             .map((item, index) => ({ item, index }))
-            .filter(({ item }) => item.name.toLowerCase().includes(query));
+            .filter(({ item }) => matcher(item.name));
         renderFolderView();
     } else {
         state.filteredPlaylist = state.playlist
             .map((track, index) => ({ track, index }))
-            .filter(({ track }) => track.name.toLowerCase().includes(query));
+            .filter(({ track }) => matcher(track.name));
         renderPlaylist();
     }
     updateFilterStatus();
