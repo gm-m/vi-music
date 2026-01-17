@@ -154,6 +154,7 @@ Press `:` to enter command mode. Available commands:
 - `:save <name>` or `:w <name>` - Save current playlist
 - `:load <name>` or `:e <name>` - Load a saved playlist
 - `:playlists` or `:pl` - Open playlist manager
+- `:rename <old> > <new>` or `:rn` - Rename a playlist
 - `:delplaylist <name>` or `:dp <name>` - Delete a playlist
 - `:reload` or `:r` - Reload folder content
 - `:jump <0-100>` or `:j <0-100>` - Jump to percentage of track

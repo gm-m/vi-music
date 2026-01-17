@@ -626,6 +626,29 @@ function executeCommand(cmd) {
                 updateStatus('Usage: :delplaylist <playlist name>');
             }
             break;
+        case 'rename':
+        case 'rn':
+            if (parts[1] && parts[2]) {
+                // Find the separator between old and new name
+                const restArgs = parts.slice(1).join(' ');
+                // Support "oldname newname" or "oldname > newname"
+                let oldName, newName;
+                if (restArgs.includes('>')) {
+                    [oldName, newName] = restArgs.split('>').map(s => s.trim());
+                } else {
+                    // Assume first word is old name, rest is new name
+                    oldName = parts[1];
+                    newName = parts.slice(2).join(' ');
+                }
+                if (oldName && newName) {
+                    renamePlaylist(oldName, newName);
+                } else {
+                    updateStatus('Usage: :rename <old name> > <new name>');
+                }
+            } else {
+                updateStatus('Usage: :rename <old name> > <new name>');
+            }
+            break;
         case 'sleep':
             if (parts[1]) {
                 const arg = parts[1];
@@ -920,6 +943,23 @@ async function loadSavedPlaylist(name) {
         updateStatus(`Loaded "${name}" (${tracks.length} tracks)`);
     } catch (err) {
         console.error('Failed to load playlist:', err);
+        updateStatus(`Error: ${err}`);
+    }
+}
+
+async function renamePlaylist(oldName, newName) {
+    try {
+        await invoke('rename_playlist', { oldName, newName });
+        updateStatus(`Playlist renamed: "${oldName}" → "${newName}"`);
+        if (state.playlistManagerOpen) {
+            refreshPlaylistManager();
+        }
+        // Update rootFolder if we're viewing the renamed playlist
+        if (state.rootFolder === `Playlist: ${oldName}`) {
+            state.rootFolder = `Playlist: ${newName}`;
+        }
+    } catch (err) {
+        console.error('Failed to rename playlist:', err);
         updateStatus(`Error: ${err}`);
     }
 }
