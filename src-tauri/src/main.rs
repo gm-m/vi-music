@@ -77,6 +77,7 @@ enum AudioCommand {
     SetVolume(f32),
     Seek(u64),
     SetSpeed(f32),
+    SetDevice(String), // Device name to switch to
 }
 
 struct PlaybackState {
@@ -256,12 +257,34 @@ impl AudioPlayer {
         
         thread::spawn(move || {
             use rodio::{Decoder, OutputStream, Sink};
+            use cpal::traits::{HostTrait, DeviceTrait};
             use std::fs::File;
             use std::io::BufReader;
             use std::time::Duration;
             
-            let (_stream, stream_handle) = OutputStream::try_default().unwrap();
+            // Store stream and handle - will be recreated on device change
+            let mut audio_output: Option<(OutputStream, rodio::OutputStreamHandle)> = 
+                OutputStream::try_default().ok();
             let mut current_sink: Option<Sink> = None;
+            let mut selected_device_name: Option<String> = None;
+            
+            // Helper to create output for a specific device or default
+            fn create_output_for_device(device_name: &Option<String>) -> Option<(OutputStream, rodio::OutputStreamHandle)> {
+                if let Some(ref name) = device_name {
+                    let host = cpal::default_host();
+                    if let Ok(devices) = host.output_devices() {
+                        for device in devices {
+                            if let Ok(dev_name) = device.name() {
+                                if dev_name == *name {
+                                    return OutputStream::try_from_device(&device).ok();
+                                }
+                            }
+                        }
+                    }
+                }
+                // Fall back to default
+                OutputStream::try_default().ok()
+            }
             
             fn play_file(path: &str, volume: f32, seek_secs: u64, stream_handle: &rodio::OutputStreamHandle) -> Option<Sink> {
                 use std::path::Path;
@@ -304,9 +327,28 @@ impl AudioPlayer {
                             if let Some(sink) = current_sink.take() {
                                 sink.stop();
                             }
-                            if let Some(sink) = play_file(&path, volume, skip_secs, &stream_handle) {
-                                current_sink = Some(sink);
-                                
+                            
+                            // Try to play, recreating output stream if needed
+                            let mut played = false;
+                            if let Some(ref handle) = audio_output.as_ref().map(|(_, h)| h) {
+                                if let Some(sink) = play_file(&path, volume, skip_secs, handle) {
+                                    current_sink = Some(sink);
+                                    played = true;
+                                }
+                            }
+                            
+                            // If playback failed, try recreating the audio output (device may have changed)
+                            if !played {
+                                audio_output = create_output_for_device(&selected_device_name);
+                                if let Some(ref handle) = audio_output.as_ref().map(|(_, h)| h) {
+                                    if let Some(sink) = play_file(&path, volume, skip_secs, handle) {
+                                        current_sink = Some(sink);
+                                        played = true;
+                                    }
+                                }
+                            }
+                            
+                            if played {
                                 let mut state = state_clone.lock().unwrap();
                                 state.start_time = Some(Instant::now());
                                 state.start_position = skip_secs;
@@ -402,15 +444,75 @@ impl AudioPlayer {
                                         sink.stop();
                                     }
                                     
-                                    if let Some(sink) = play_file(&path, volume, position, &stream_handle) {
-                                        current_sink = Some(sink);
-                                        
+                                    // Try with current output, recreate if needed
+                                    let mut played = false;
+                                    if let Some(ref handle) = audio_output.as_ref().map(|(_, h)| h) {
+                                        if let Some(sink) = play_file(&path, volume, position, handle) {
+                                            current_sink = Some(sink);
+                                            played = true;
+                                        }
+                                    }
+                                    
+                                    if !played {
+                                        audio_output = create_output_for_device(&selected_device_name);
+                                        if let Some(ref handle) = audio_output.as_ref().map(|(_, h)| h) {
+                                            if let Some(sink) = play_file(&path, volume, position, handle) {
+                                                current_sink = Some(sink);
+                                                played = true;
+                                            }
+                                        }
+                                    }
+                                    
+                                    if played {
                                         let mut state = state_clone.lock().unwrap();
                                         state.start_time = Some(Instant::now());
                                         state.start_position = position;
                                         state.is_paused = false;
                                         state.pause_time = None;
                                         state.is_finished = false;
+                                    }
+                                }
+                            }
+                        }
+                        AudioCommand::SetDevice(device_name) => {
+                            // Store the selected device name
+                            selected_device_name = if device_name.is_empty() { None } else { Some(device_name) };
+                            
+                            // Get current playback state before switching
+                            let state = state_clone.lock().unwrap();
+                            let was_playing = state.start_time.is_some() && !state.is_paused;
+                            let current_path = state.current_path.clone();
+                            let current_position = state.get_elapsed();
+                            drop(state);
+                            
+                            // Get current volume before stopping
+                            let volume = if let Some(ref sink) = current_sink {
+                                sink.volume()
+                            } else {
+                                1.0
+                            };
+                            
+                            // Stop current playback
+                            if let Some(sink) = current_sink.take() {
+                                sink.stop();
+                            }
+                            
+                            // Recreate audio output with new device
+                            audio_output = create_output_for_device(&selected_device_name);
+                            
+                            // Resume playback if was playing
+                            if was_playing {
+                                if let Some(ref path) = current_path {
+                                    if let Some(ref handle) = audio_output.as_ref().map(|(_, h)| h) {
+                                        if let Some(sink) = play_file(path, volume, current_position, handle) {
+                                            current_sink = Some(sink);
+                                            
+                                            let mut state = state_clone.lock().unwrap();
+                                            state.start_time = Some(Instant::now());
+                                            state.start_position = current_position;
+                                            state.is_paused = false;
+                                            state.pause_time = None;
+                                        }
                                     }
                                 }
                             }
@@ -674,6 +776,29 @@ fn count_audio_files(path: &PathBuf) -> usize {
         .filter_map(|e| e.ok())
         .filter(|e| e.path().is_file() && is_audio_file(&e.path().to_path_buf()))
         .count()
+}
+
+#[tauri::command]
+fn list_audio_devices() -> Vec<String> {
+    use cpal::traits::{HostTrait, DeviceTrait};
+    
+    let host = cpal::default_host();
+    let mut devices = Vec::new();
+    
+    if let Ok(output_devices) = host.output_devices() {
+        for device in output_devices {
+            if let Ok(name) = device.name() {
+                devices.push(name);
+            }
+        }
+    }
+    
+    devices
+}
+
+#[tauri::command]
+fn set_audio_device(device_name: String, state: State<AppState>) {
+    state.player.send(AudioCommand::SetDevice(device_name));
 }
 
 #[tauri::command]
@@ -1268,6 +1393,8 @@ fn main() {
             remove_library_folder,
             scan_library_folder,
             set_playlist,
+            list_audio_devices,
+            set_audio_device,
         ])
         .setup(|app| {
             // Initialize media controls

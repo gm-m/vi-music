@@ -741,6 +741,24 @@ function executeCommand(cmd) {
         case 'b':
             goBack();
             break;
+        case 'devices':
+        case 'dev':
+            showAudioDevices();
+            break;
+        case 'device':
+        case 'd':
+            if (parts[1]) {
+                const deviceNum = parseInt(parts[1]);
+                if (!isNaN(deviceNum)) {
+                    setAudioDeviceByIndex(deviceNum - 1);
+                } else {
+                    // Treat as device name
+                    setAudioDevice(parts.slice(1).join(' '));
+                }
+            } else {
+                showAudioDevices();
+            }
+            break;
     }
 }
 
@@ -880,6 +898,35 @@ async function showLibraryFolders() {
     } else {
         const list = folders.map((f, i) => `${i + 1}. ${f}`).join('\n');
         updateStatus(`Library folders:\n${list}`);
+    }
+}
+
+// Audio Device Management
+async function getAudioDevices() {
+    return await invoke('list_audio_devices');
+}
+
+async function showAudioDevices() {
+    const devices = await getAudioDevices();
+    if (devices.length === 0) {
+        updateStatus('No audio output devices found');
+    } else {
+        const list = devices.map((d, i) => `${i + 1}. ${d}`).join('\n');
+        updateStatus(`Audio devices:\n${list}\nUse :device <number> to switch`);
+    }
+}
+
+async function setAudioDevice(deviceName) {
+    await invoke('set_audio_device', { deviceName });
+    updateStatus(`Audio output: ${deviceName || 'Default'}`);
+}
+
+async function setAudioDeviceByIndex(index) {
+    const devices = await getAudioDevices();
+    if (index >= 0 && index < devices.length) {
+        await setAudioDevice(devices[index]);
+    } else {
+        updateStatus('Invalid device number. Use :devices to see list');
     }
 }
 
