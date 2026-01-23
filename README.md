@@ -18,8 +18,11 @@ A minimal, VIM-style music player built with Tauri and vanilla JavaScript.
 |-----|--------|
 | `j` | Move selection down |
 | `k` | Move selection up |
+| `3j` / `5k` | Move N lines (count prefix) |
 | `gg` | Go to first track |
+| `5gg` | Go to line 5 |
 | `G` | Go to last track |
+| `5G` | Go to line 5 |
 
 ### Playback
 | Key | Action |
@@ -174,8 +177,22 @@ Press `:` to enter command mode. Available commands:
 - `:delmark <a-z>` - Delete a bookmark
 - `:<line>d` - Delete track at line number (e.g., `:5d`)
 - `:<start>,<end>d` - Delete range of tracks (e.g., `:10,20d`)
+- `:set <option>` - Enable a setting (e.g., `:set relativenumber`)
+- `:set no<option>` - Disable a setting (e.g., `:set norelativenumber`)
+- `:set <option>!` - Toggle a setting
+- `:set <option>?` - Query a setting value
+- `:set` - Show all current settings
 - `:help` or `:h` - Show help
 - `:quit` or `:q` - Quit application
+
+### Settings
+
+| Setting | Alias | Description |
+|---------|-------|-------------|
+| `relativenumber` | `rnu` | Show relative line numbers |
+| `number` | `nu` | Show line numbers |
+
+Settings are persisted in `~/.config/vi-music/settings.json`.
 
 ## Prerequisites
 

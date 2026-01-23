@@ -90,6 +90,7 @@ const state = {
     speed: 1.0,
     mode: 'normal', // 'normal' | 'command' | 'filter' | 'visual'
     pendingKey: null, // for multi-key commands like 'gg'
+    countPrefix: '', // for count prefixes like '3j', '5k'
     visualStart: -1, // Start index for visual selection
     elapsed: 0,
     duration: null,
@@ -126,6 +127,12 @@ const state = {
     loopA: null, // Start position in seconds
     loopB: null, // End position in seconds
     loopInterval: null,
+    // Settings
+    settings: {
+        relativenumber: false, // Show relative line numbers
+        number: true, // Show line numbers
+        // Add more settings as needed
+    },
 };
 
 // DOM Elements
@@ -166,6 +173,7 @@ const elements = {
 // Initialize
 async function init() {
     await loadKeybindings();
+    await loadSettings();
     updateVolumeDisplay();
     setupEventListeners();
     setupMediaControlListener();
@@ -183,6 +191,27 @@ async function loadKeybindings() {
     } catch (err) {
         console.error('Failed to load keybindings:', err);
         userKeybindings = {};
+    }
+}
+
+// Load settings from config
+async function loadSettings() {
+    try {
+        const json = await invoke('get_settings');
+        const saved = JSON.parse(json);
+        // Merge saved settings with defaults
+        state.settings = { ...state.settings, ...saved };
+    } catch (err) {
+        console.error('Failed to load settings:', err);
+    }
+}
+
+// Save settings to config
+async function saveSettings() {
+    try {
+        await invoke('save_settings', { settings: JSON.stringify(state.settings) });
+    } catch (err) {
+        console.error('Failed to save settings:', err);
     }
 }
 
@@ -224,69 +253,84 @@ function getKeyString(e) {
 
 // Execute an action by name
 function executeAction(action, e) {
+    // Get count from prefix (default 1)
+    const count = parseInt(state.countPrefix) || 1;
+    
+    // Clear count prefix after using it
+    const clearCount = () => { state.countPrefix = ''; };
+    
     switch (action) {
-        // Navigation
-        case 'moveDown': moveSelection(1); return true;
-        case 'moveUp': moveSelection(-1); return true;
+        // Navigation (with count support)
+        case 'moveDown': moveSelection(count); clearCount(); return true;
+        case 'moveUp': moveSelection(-count); clearCount(); return true;
         case 'pendingG': state.pendingKey = 'g'; return true;
-        case 'goToEnd': goToBottom(); return true;
-        case 'goToTop': goToTop(); return true;
-        case 'pageDown': e?.preventDefault(); moveSelection(10); return true;
-        case 'pageUp': e?.preventDefault(); moveSelection(-10); return true;
+        case 'goToEnd': 
+            if (state.countPrefix) {
+                // 5G goes to line 5
+                selectTrack(Math.min(count - 1, state.playlist.length - 1));
+            } else {
+                goToBottom();
+            }
+            clearCount();
+            return true;
+        case 'goToTop': goToTop(); clearCount(); return true;
+        case 'pageDown': e?.preventDefault(); moveSelection(10 * count); clearCount(); return true;
+        case 'pageUp': e?.preventDefault(); moveSelection(-10 * count); clearCount(); return true;
         
         // Playback
-        case 'playSelected': playSelected(); return true;
-        case 'togglePause': e?.preventDefault(); togglePause(); return true;
-        case 'stop': stop(); return true;
-        case 'nextTrack': nextTrack(); return true;
-        case 'prevTrack': prevTrack(); return true;
+        case 'playSelected': clearCount(); playSelected(); return true;
+        case 'togglePause': e?.preventDefault(); clearCount(); togglePause(); return true;
+        case 'stop': clearCount(); stop(); return true;
+        case 'nextTrack': clearCount(); nextTrack(); return true;
+        case 'prevTrack': clearCount(); prevTrack(); return true;
         
         // Volume
-        case 'volumeUp': adjustVolume(0.05); return true;
-        case 'volumeDown': adjustVolume(-0.05); return true;
-        case 'toggleMute': toggleMute(); return true;
+        case 'volumeUp': clearCount(); adjustVolume(0.05); return true;
+        case 'volumeDown': clearCount(); adjustVolume(-0.05); return true;
+        case 'toggleMute': clearCount(); toggleMute(); return true;
         
         // Speed
-        case 'speedUp': changeSpeed(0.25); return true;
-        case 'speedDown': changeSpeed(-0.25); return true;
-        case 'speedReset': resetSpeed(); return true;
+        case 'speedUp': clearCount(); changeSpeed(0.25); return true;
+        case 'speedDown': clearCount(); changeSpeed(-0.25); return true;
+        case 'speedReset': clearCount(); resetSpeed(); return true;
         
-        // Seek
-        case 'seekForward': seekRelative(5); return true;
-        case 'seekBackward': seekRelative(-5); return true;
-        case 'seekForwardLarge': seekRelative(30); return true;
-        case 'seekBackwardLarge': seekRelative(-30); return true;
+        // Seek (with count support)
+        case 'seekForward': seekRelative(5 * count); clearCount(); return true;
+        case 'seekBackward': seekRelative(-5 * count); clearCount(); return true;
+        case 'seekForwardLarge': seekRelative(30 * count); clearCount(); return true;
+        case 'seekBackwardLarge': seekRelative(-30 * count); clearCount(); return true;
         
         // Modes
-        case 'commandMode': e?.preventDefault(); enterCommandMode(); return true;
-        case 'filterMode': e?.preventDefault(); enterFilterMode(); return true;
+        case 'commandMode': e?.preventDefault(); clearCount(); enterCommandMode(); return true;
+        case 'filterMode': e?.preventDefault(); clearCount(); enterFilterMode(); return true;
         case 'normalMode':
+            clearCount();
             if (state.filterText) clearFilter();
             else closeModals();
             return true;
-        case 'visualMode': enterVisualMode(); return true;
+        case 'visualMode': clearCount(); enterVisualMode(); return true;
         
         // View
-        case 'toggleView': e?.preventDefault(); toggleViewMode(); return true;
+        case 'toggleView': e?.preventDefault(); clearCount(); toggleViewMode(); return true;
         
         // Repeat/Shuffle
-        case 'cycleRepeat': toggleRepeat(); return true;
-        case 'toggleShuffle': toggleShuffle(); return true;
+        case 'cycleRepeat': clearCount(); toggleRepeat(); return true;
+        case 'toggleShuffle': clearCount(); toggleShuffle(); return true;
         
         // Queue
-        case 'addToQueue': addToQueue(); return true;
-        case 'toggleQueueView': toggleQueueView(); return true;
+        case 'addToQueue': clearCount(); addToQueue(); return true;
+        case 'toggleQueueView': clearCount(); toggleQueueView(); return true;
         
         // Folder
-        case 'openFolder': openFolder(); return true;
-        case 'reloadContent': reloadContent(); return true;
+        case 'openFolder': clearCount(); openFolder(); return true;
+        case 'reloadContent': clearCount(); reloadContent(); return true;
         
         // Playlist
-        case 'openPlaylistManager': showPlaylistManager(); return true;
-        case 'addToPlaylist': showAddToPlaylistPicker(getSelectedTrackPaths()); return true;
+        case 'openPlaylistManager': clearCount(); showPlaylistManager(); return true;
+        case 'addToPlaylist': clearCount(); showAddToPlaylistPicker(getSelectedTrackPaths()); return true;
         
         // Help
-        case 'toggleHelp': toggleHelp(); return true;
+        case 'toggleHelp': clearCount(); toggleHelp(); return true;
         
         // Pending keys
         case 'pendingD': state.pendingKey = 'd'; return true;
@@ -294,11 +338,11 @@ function executeAction(action, e) {
         case 'pendingQuote': state.pendingKey = "'"; return true;
         
         // A-B Loop
-        case 'setLoopA': setLoopA(); return true;
-        case 'setLoopB': setLoopB(); return true;
-        case 'clearLoop': clearLoop(); return true;
+        case 'setLoopA': clearCount(); setLoopA(); return true;
+        case 'setLoopB': clearCount(); setLoopB(); return true;
+        case 'clearLoop': clearCount(); clearLoop(); return true;
         
-        default: return false;
+        default: clearCount(); return false;
     }
 }
 
@@ -407,12 +451,28 @@ function handleKeyDown(e) {
         return;
     }
     
+    // Handle count prefix (e.g., 3j, 5k, 10G)
+    if (/^[0-9]$/.test(e.key) && state.pendingKey === null) {
+        // Don't start with 0 (0 could be used for other things)
+        if (state.countPrefix !== '' || e.key !== '0') {
+            state.countPrefix += e.key;
+            return;
+        }
+    }
+    
     // Handle multi-key commands
     if (state.pendingKey === 'g') {
         if (e.key === 'g') {
-            goToTop();
+            const count = parseInt(state.countPrefix) || 1;
+            if (state.countPrefix) {
+                // 5gg goes to line 5
+                selectTrack(Math.min(count - 1, state.playlist.length - 1));
+            } else {
+                goToTop();
+            }
         }
         state.pendingKey = null;
+        state.countPrefix = '';
         return;
     }
     
@@ -424,6 +484,7 @@ function handleKeyDown(e) {
             }
         }
         state.pendingKey = null;
+        state.countPrefix = '';
         return;
     }
     
@@ -433,6 +494,7 @@ function handleKeyDown(e) {
             jumpToBookmark(e.key.toLowerCase());
         }
         state.pendingKey = null;
+        state.countPrefix = '';
         return;
     }
     
@@ -442,6 +504,7 @@ function handleKeyDown(e) {
             setBookmark(e.key.toLowerCase());
         }
         state.pendingKey = null;
+        state.countPrefix = '';
         return;
     }
     
@@ -759,6 +822,20 @@ function executeCommand(cmd) {
                 showAudioDevices();
             }
             break;
+        case 'set':
+            if (parts[1]) {
+                handleSetCommand(parts.slice(1).join(' '));
+            } else {
+                showCurrentSettings();
+            }
+            break;
+    }
+    
+    // Handle relative jump: +N or -N
+    if (/^[+-]\d+$/.test(cmd)) {
+        const offset = parseInt(cmd);
+        moveSelectionRelative(offset);
+        return;
     }
 }
 
@@ -943,6 +1020,117 @@ async function goBack() {
         await scanLibrary();
     } else {
         await loadFolder(previous);
+    }
+}
+
+// Settings Management
+function handleSetCommand(arg) {
+    const trimmed = arg.trim();
+    
+    // Handle "no" prefix to disable (e.g., "norelativenumber")
+    if (trimmed.startsWith('no')) {
+        const setting = trimmed.slice(2);
+        if (setting in state.settings) {
+            state.settings[setting] = false;
+            saveSettings();
+            renderPlaylist();
+            updateStatus(`${setting} disabled`);
+            return;
+        }
+    }
+    
+    // Handle "setting!" to toggle
+    if (trimmed.endsWith('!')) {
+        const setting = trimmed.slice(0, -1);
+        if (setting in state.settings) {
+            state.settings[setting] = !state.settings[setting];
+            saveSettings();
+            renderPlaylist();
+            updateStatus(`${setting} ${state.settings[setting] ? 'enabled' : 'disabled'}`);
+            return;
+        }
+    }
+    
+    // Handle "setting?" to query
+    if (trimmed.endsWith('?')) {
+        const setting = trimmed.slice(0, -1);
+        if (setting in state.settings) {
+            updateStatus(`${setting}=${state.settings[setting]}`);
+            return;
+        }
+    }
+    
+    // Handle "setting=value"
+    if (trimmed.includes('=')) {
+        const [setting, value] = trimmed.split('=');
+        if (setting in state.settings) {
+            if (value === 'true' || value === '1') {
+                state.settings[setting] = true;
+            } else if (value === 'false' || value === '0') {
+                state.settings[setting] = false;
+            } else {
+                state.settings[setting] = value;
+            }
+            saveSettings();
+            renderPlaylist();
+            updateStatus(`${setting}=${state.settings[setting]}`);
+            return;
+        }
+    }
+    
+    // Handle just setting name to enable
+    if (trimmed in state.settings) {
+        state.settings[trimmed] = true;
+        saveSettings();
+        renderPlaylist();
+        updateStatus(`${trimmed} enabled`);
+        return;
+    }
+    
+    // Aliases
+    const aliases = {
+        'rnu': 'relativenumber',
+        'rn': 'relativenumber',
+        'nu': 'number',
+    };
+    
+    if (aliases[trimmed]) {
+        state.settings[aliases[trimmed]] = true;
+        saveSettings();
+        renderPlaylist();
+        updateStatus(`${aliases[trimmed]} enabled`);
+        return;
+    }
+    
+    if (trimmed.startsWith('no') && aliases[trimmed.slice(2)]) {
+        state.settings[aliases[trimmed.slice(2)]] = false;
+        saveSettings();
+        renderPlaylist();
+        updateStatus(`${aliases[trimmed.slice(2)]} disabled`);
+        return;
+    }
+    
+    updateStatus(`Unknown setting: ${trimmed}`);
+}
+
+function showCurrentSettings() {
+    const settings = Object.entries(state.settings)
+        .map(([k, v]) => `${k}=${v}`)
+        .join(', ');
+    updateStatus(`Settings: ${settings}`);
+}
+
+function moveSelectionRelative(offset) {
+    const list = state.viewMode === 'folder' ? state.folderContents : state.playlist;
+    if (list.length === 0) return;
+    
+    if (state.viewMode === 'folder') {
+        const newIndex = Math.max(0, Math.min(list.length - 1, state.folderSelectedIndex + offset));
+        state.folderSelectedIndex = newIndex;
+        renderFolderView();
+    } else {
+        const newIndex = Math.max(0, Math.min(list.length - 1, state.selectedIndex + offset));
+        selectTrack(newIndex);
     }
 }
 
@@ -2725,9 +2913,20 @@ function renderPlaylist() {
         
         const duration = formatDuration(track.duration);
         
+        // Calculate line number display
+        let lineNum = '';
+        if (state.settings.number || state.settings.relativenumber) {
+            if (state.settings.relativenumber) {
+                const relativeNum = index === state.selectedIndex ? index + 1 : Math.abs(index - state.selectedIndex);
+                lineNum = String(relativeNum).padStart(3, ' ');
+            } else {
+                lineNum = String(index + 1).padStart(3, ' ');
+            }
+        }
+        
         return `
             <div class="${classes.join(' ')}" data-index="${index}">
-                <span class="track-number">${String(index + 1).padStart(3, ' ')}</span>
+                <span class="track-number">${lineNum}</span>
                 <span class="track-item-name">${escapeHtml(track.name)}</span>
                 <span class="track-duration">${duration}</span>
                 <svg class="track-playing-indicator" viewBox="0 0 24 24" fill="currentColor">
