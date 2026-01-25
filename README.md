@@ -5,7 +5,7 @@ A minimal, VIM-style music player built with Tauri and vanilla JavaScript.
 ## Features
 
 - **VIM-style keybindings** for efficient navigation and control
-- **Supported formats**: MP3, WAV, FLAC
+- **Supported formats**: MP3, WAV, FLAC, AIF, AIFF, OGG, M4A
 - **Minimal, dark UI** with a focus on keyboard-driven interaction
 - **Command mode** for advanced operations
 - **Filter/search** to quickly find tracks

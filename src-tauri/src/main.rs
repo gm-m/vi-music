@@ -663,7 +663,7 @@ struct PlayerStatus {
 fn is_audio_file(path: &PathBuf) -> bool {
     if let Some(ext) = path.extension() {
         let ext = ext.to_string_lossy().to_lowercase();
-        matches!(ext.as_str(), "mp3" | "wav" | "flac")
+        matches!(ext.as_str(), "mp3" | "wav" | "flac" | "ogg" | "m4a" | "aif" | "aiff")
     } else {
         false
     }
@@ -1363,7 +1363,7 @@ fn scan_folder_recursive(dir: &PathBuf, tracks: &mut Vec<TrackInfo>) {
                 scan_folder_recursive(&path, tracks);
             } else if let Some(ext) = path.extension() {
                 let ext_lower = ext.to_string_lossy().to_lowercase();
-                if ext_lower == "mp3" || ext_lower == "flac" || ext_lower == "wav" || ext_lower == "ogg" || ext_lower == "m4a" {
+                if ext_lower == "mp3" || ext_lower == "flac" || ext_lower == "wav" || ext_lower == "ogg" || ext_lower == "m4a" || ext_lower == "aif" || ext_lower == "aiff" {
                     if let Some(name) = path.file_name() {
                         let path_str = path.to_string_lossy().to_string();
                         let duration = get_audio_duration(&path_str);
