@@ -39,6 +39,24 @@ struct PlaylistInfo {
     track_count: usize,
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+struct ArtistInfo {
+    name: String,
+    track_count: usize,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+struct TrackMeta {
+    path: String,
+    artist: Option<String>,
+    title: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Default)]
+struct MetadataCache {
+    tracks: Vec<TrackMeta>,
+}
+
 fn get_config_path() -> Option<PathBuf> {
     dirs::config_dir().map(|p| p.join("vi-music").join("config.json"))
 }
@@ -66,6 +84,51 @@ fn save_config(config: &AppConfig) -> Result<(), String> {
     let content = serde_json::to_string_pretty(config).map_err(|e| e.to_string())?;
     fs::write(&path, content).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+fn get_metadata_cache_path() -> Option<PathBuf> {
+    dirs::config_dir().map(|p| p.join("vi-music").join("metadata_cache.json"))
+}
+
+fn load_metadata_cache() -> MetadataCache {
+    if let Some(path) = get_metadata_cache_path() {
+        if let Ok(content) = fs::read_to_string(&path) {
+            if let Ok(cache) = serde_json::from_str(&content) {
+                return cache;
+            }
+        }
+    }
+    MetadataCache::default()
+}
+
+fn save_metadata_cache(cache: &MetadataCache) -> Result<(), String> {
+    let path = get_metadata_cache_path().ok_or("Could not determine cache path")?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let content = serde_json::to_string_pretty(cache).map_err(|e| e.to_string())?;
+    fs::write(&path, content).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn extract_track_meta(path: &str) -> TrackMeta {
+    use lofty::{Accessor, TaggedFileExt};
+    
+    let mut artist = None;
+    let mut title = None;
+    
+    if let Ok(tagged_file) = lofty::read_from_path(path) {
+        if let Some(tag) = tagged_file.primary_tag().or_else(|| tagged_file.first_tag()) {
+            artist = tag.artist().map(|s| s.to_string());
+            title = tag.title().map(|s| s.to_string());
+        }
+    }
+    
+    TrackMeta {
+        path: path.to_string(),
+        artist,
+        title,
+    }
 }
 
 #[derive(Clone)]
@@ -802,6 +865,110 @@ fn set_audio_device(device_name: String, state: State<AppState>) {
 }
 
 #[tauri::command]
+fn scan_metadata(tracks: Vec<String>) -> Result<Vec<TrackMeta>, String> {
+    // Check cache first - build a set of already-cached paths
+    let mut cache = load_metadata_cache();
+    let cached_paths: std::collections::HashSet<String> = cache.tracks.iter().map(|t| t.path.clone()).collect();
+    
+    let mut new_tracks = Vec::new();
+    for path in &tracks {
+        if !cached_paths.contains(path) {
+            new_tracks.push(extract_track_meta(path));
+        }
+    }
+    
+    // Merge new tracks into cache
+    if !new_tracks.is_empty() {
+        cache.tracks.extend(new_tracks);
+        let _ = save_metadata_cache(&cache);
+    }
+    
+    // Return only metadata for the requested tracks
+    let requested: std::collections::HashSet<&String> = tracks.iter().collect();
+    let result: Vec<TrackMeta> = cache.tracks.iter()
+        .filter(|t| requested.contains(&t.path))
+        .cloned()
+        .collect();
+    
+    Ok(result)
+}
+
+#[tauri::command]
+fn get_artists(tracks: Vec<String>) -> Result<Vec<ArtistInfo>, String> {
+    // Load cache, scan any uncached tracks
+    let mut cache = load_metadata_cache();
+    let cached_paths: std::collections::HashSet<String> = cache.tracks.iter().map(|t| t.path.clone()).collect();
+    
+    let mut new_tracks = Vec::new();
+    for path in &tracks {
+        if !cached_paths.contains(path) {
+            new_tracks.push(extract_track_meta(path));
+        }
+    }
+    
+    if !new_tracks.is_empty() {
+        cache.tracks.extend(new_tracks);
+        let _ = save_metadata_cache(&cache);
+    }
+    
+    // Build artist list from requested tracks
+    let requested: std::collections::HashSet<&String> = tracks.iter().collect();
+    let mut artist_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    
+    for track in &cache.tracks {
+        if requested.contains(&track.path) {
+            let artist_name = track.artist.clone().unwrap_or_else(|| "Unknown Artist".to_string());
+            *artist_counts.entry(artist_name).or_insert(0) += 1;
+        }
+    }
+    
+    let mut artists: Vec<ArtistInfo> = artist_counts.into_iter()
+        .map(|(name, track_count)| ArtistInfo { name, track_count })
+        .collect();
+    
+    artists.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    
+    Ok(artists)
+}
+
+#[tauri::command]
+fn get_artist_tracks(artist: String, tracks: Vec<String>) -> Result<Vec<TrackInfo>, String> {
+    let cache = load_metadata_cache();
+    let requested: std::collections::HashSet<&String> = tracks.iter().collect();
+    
+    let mut result: Vec<TrackInfo> = cache.tracks.iter()
+        .filter(|t| {
+            requested.contains(&t.path) &&
+            t.artist.as_deref().unwrap_or("Unknown Artist") == artist
+        })
+        .enumerate()
+        .map(|(i, t)| {
+            let name = t.title.clone().unwrap_or_else(|| {
+                PathBuf::from(&t.path)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_default()
+            });
+            let duration = get_audio_duration(&t.path);
+            TrackInfo {
+                path: t.path.clone(),
+                name,
+                index: i,
+                duration,
+            }
+        })
+        .collect();
+    
+    result.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    // Re-index after sort
+    for (i, track) in result.iter_mut().enumerate() {
+        track.index = i;
+    }
+    
+    Ok(result)
+}
+
+#[tauri::command]
 fn play_track(index: usize, skip_secs: Option<u64>, state: State<AppState>) -> Result<TrackInfo, String> {
     let playlist = state.playlist.lock().unwrap();
     
@@ -1419,6 +1586,9 @@ fn main() {
             set_playlist,
             list_audio_devices,
             set_audio_device,
+            scan_metadata,
+            get_artists,
+            get_artist_tracks,
         ])
         .setup(|app| {
             // Initialize media controls

@@ -127,6 +127,14 @@ In folder view, you can browse the folder structure with a breadcrumb showing yo
 - **`v`** - Enter visual mode for multi-select
 - **`p`** - Add selected file(s) to playlist
 
+### Artist View
+Browse your library by artist. Use `:artists` to enter this view.
+- **`j`/`k`** - Navigate artists or tracks
+- **`Enter`** - Open artist's tracks / Play track
+- **`Backspace`** - Go back to artist list / Exit artist view
+- **`Tab`/`Esc`** - Return to playlist view
+- Metadata is cached after first scan for instant loading
+
 ### Visual Mode
 | Key | Action |
 |-----|--------|
@@ -168,6 +176,7 @@ Press `:` to enter command mode. Available commands:
 - `:removelib <n>` or `:rl <n>` - Remove library folder by number
 - `:scanlib` or `:scan` - Scan all library folders (recursive)
 - `:back` or `:b` - Go back to previous folder/library
+- `:artists` or `:ar` - Browse tracks by artist
 - `:devices` or `:dev` - List available audio output devices
 - `:device <n>` or `:d <n>` - Switch to audio device by number
 - `:sleep <minutes>` - Set sleep timer (0 to cancel)

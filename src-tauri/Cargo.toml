@@ -21,6 +21,7 @@ mp3-duration = "0.1"
 walkdir = "2.4"
 dirs = "5.0"
 souvlaki = "0.7"
+lofty = "0.18"
 
 [features]
 default = ["custom-protocol"]
