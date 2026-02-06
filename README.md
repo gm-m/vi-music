@@ -8,7 +8,7 @@ A minimal, VIM-style music player built with Tauri and vanilla JavaScript.
 - **Supported formats**: MP3, WAV, FLAC, AIF, AIFF, OGG, M4A
 - **Minimal, dark UI** with a focus on keyboard-driven interaction
 - **Command mode** for advanced operations
-- **Filter/search** to quickly find tracks
+- **Regex-based, incremental search** to quickly find tracks as you type
 - **Track duration display** in the playlist
 
 ## Keyboard Shortcuts
@@ -161,6 +161,8 @@ Press `:` to enter command mode. Available commands:
 - `:delplaylist <name>` or `:dp <name>` - Delete a playlist
 - `:reload` or `:r` - Reload folder content
 - `:jump <0-100>` or `:j <0-100>` - Jump to percentage of track
+- `:jump m:ss` or `:j m:ss` - Jump to specific time (e.g., `:j 1:23`)
+- `:jump h:mm:ss` - Jump to time for longer tracks (e.g., `:j 1:05:30`)
 - `:addlib` or `:al` - Add folder to music library
 - `:libs` or `:library` - Show library folders
 - `:removelib <n>` or `:rl <n>` - Remove library folder by number

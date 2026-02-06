@@ -25,8 +25,8 @@ const defaultKeybindings = {
     'Enter': 'playSelected',
     'Space': 'togglePause',
     's': 'stop',
-    'n': 'nextTrack',
-    'p': 'prevTrack',
+    'J': 'nextTrack',
+    'K': 'prevTrack',
     // Volume
     '+': 'volumeUp',
     '=': 'volumeUp',
@@ -762,14 +762,35 @@ function executeCommand(cmd) {
         case 'jump':
         case 'j':
             if (parts[1]) {
-                const percent = parseInt(parts[1].replace('%', ''));
-                if (!isNaN(percent) && percent >= 0 && percent <= 100) {
-                    jumpToPercent(percent);
+                const jumpArg = parts[1].trim();
+                // Check for time format (m:ss or h:mm:ss)
+                if (jumpArg.includes(':')) {
+                    const timeParts = jumpArg.split(':').map(Number);
+                    let seconds = 0;
+                    if (timeParts.some(isNaN)) {
+                        updateStatus('Invalid time format. Use m:ss or h:mm:ss');
+                    } else if (timeParts.length === 2) {
+                        // m:ss
+                        seconds = timeParts[0] * 60 + timeParts[1];
+                        seekTo(seconds);
+                    } else if (timeParts.length === 3) {
+                        // h:mm:ss
+                        seconds = timeParts[0] * 3600 + timeParts[1] * 60 + timeParts[2];
+                        seekTo(seconds);
+                    } else {
+                        updateStatus('Invalid time format. Use m:ss or h:mm:ss');
+                    }
                 } else {
-                    updateStatus('Usage: :jump <0-100> (percentage)');
+                    // Percentage jump
+                    const percent = parseInt(jumpArg.replace('%', ''));
+                    if (!isNaN(percent) && percent >= 0 && percent <= 100) {
+                        jumpToPercent(percent);
+                    } else {
+                        updateStatus('Usage: :jump <0-100> or :jump m:ss');
+                    }
                 }
             } else {
-                updateStatus('Usage: :jump <0-100> (percentage)');
+                updateStatus('Usage: :jump <0-100> or :jump m:ss');
             }
             break;
         case 'addlib':
