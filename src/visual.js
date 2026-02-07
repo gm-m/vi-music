@@ -51,8 +51,23 @@ export function addVisualSelectionToQueue() {
     
     if (state.viewMode === 'folder') {
         // In folder view, queue only works with files (not folders)
-        // and requires tracks to be in the current playlist
-        updateStatus('Queue only works in list view. Use "p" to add to playlist.');
+        let addedCount = 0;
+        selection.forEach(index => {
+            const item = state.folderContents[index];
+            if (item && !item.is_folder) {
+                const playlistIdx = state.playlist.findIndex(t => t.path === item.path);
+                if (playlistIdx !== -1) {
+                    state.queue.push(playlistIdx);
+                    addedCount++;
+                }
+            }
+        });
+        updateQueueDisplay();
+        if (addedCount > 0) {
+            updateStatus(`Added ${addedCount} track${addedCount > 1 ? 's' : ''} to queue`);
+        } else {
+            updateStatus('No tracks to queue (only folders selected)');
+        }
         exitVisualMode();
         return;
     }
@@ -125,6 +140,9 @@ export function handleVisualModeKeyDown(e) {
             break;
         case 'a':
             addVisualSelectionToQueue();
+            break;
+        case 'd':
+            deleteSelectedTracks();
             break;
         case 'p':
             showAddToPlaylistPicker(getSelectedTrackPaths(getVisualSelection()));

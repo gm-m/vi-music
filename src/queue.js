@@ -5,7 +5,21 @@ import { playTrack } from './playback.js';
 
 export function addToQueue() {
     if (state.viewMode === 'folder') {
-        updateStatus('Queue only works in list view. Use "A" to load folder.');
+        const item = state.folderContents[state.folderSelectedIndex];
+        if (!item) return;
+        if (item.is_folder) {
+            updateStatus('Cannot queue a folder. Select a track.');
+            return;
+        }
+        // Find the track in the playlist by path
+        const playlistIdx = state.playlist.findIndex(t => t.path === item.path);
+        if (playlistIdx !== -1) {
+            state.queue.push(playlistIdx);
+            updateQueueDisplay();
+            updateStatus(`Added to queue: ${item.name} (${state.queue.length} in queue)`);
+        } else {
+            updateStatus('Track not in playlist');
+        }
         return;
     }
     if (state.playlist.length === 0) return;
