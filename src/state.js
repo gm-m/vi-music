@@ -61,7 +61,10 @@ export const state = {
     settings: {
         relativenumber: false, // Show relative line numbers
         number: true, // Show line numbers
-        // Add more settings as needed
+        seektime: 5, // Seek step in seconds (l/h)
+        seektimelarge: 30, // Large seek step in seconds (L/H)
+        speedstep: 0.25, // Speed change step (]/[)
+        volumestep: 0.05, // Volume change step (+/-)
     },
 };
 

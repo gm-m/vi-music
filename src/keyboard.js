@@ -46,20 +46,20 @@ export function executeAction(action, e) {
         case 'prevTrack': clearCount(); prevTrack(); return true;
         
         // Volume
-        case 'volumeUp': clearCount(); adjustVolume(0.05); return true;
-        case 'volumeDown': clearCount(); adjustVolume(-0.05); return true;
+        case 'volumeUp': clearCount(); adjustVolume(state.settings.volumestep); return true;
+        case 'volumeDown': clearCount(); adjustVolume(-state.settings.volumestep); return true;
         case 'toggleMute': clearCount(); toggleMute(); return true;
         
         // Speed
-        case 'speedUp': clearCount(); changeSpeed(0.25); return true;
-        case 'speedDown': clearCount(); changeSpeed(-0.25); return true;
+        case 'speedUp': clearCount(); changeSpeed(state.settings.speedstep); return true;
+        case 'speedDown': clearCount(); changeSpeed(-state.settings.speedstep); return true;
         case 'speedReset': clearCount(); resetSpeed(); return true;
         
         // Seek (with count support)
-        case 'seekForward': seekRelative(5 * count); clearCount(); return true;
-        case 'seekBackward': seekRelative(-5 * count); clearCount(); return true;
-        case 'seekForwardLarge': seekRelative(30 * count); clearCount(); return true;
-        case 'seekBackwardLarge': seekRelative(-30 * count); clearCount(); return true;
+        case 'seekForward': seekRelative(state.settings.seektime * count); clearCount(); return true;
+        case 'seekBackward': seekRelative(-state.settings.seektime * count); clearCount(); return true;
+        case 'seekForwardLarge': seekRelative(state.settings.seektimelarge * count); clearCount(); return true;
+        case 'seekBackwardLarge': seekRelative(-state.settings.seektimelarge * count); clearCount(); return true;
         
         // Modes
         case 'commandMode': e?.preventDefault(); clearCount(); enterCommandMode(); return true;

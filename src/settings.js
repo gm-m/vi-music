@@ -25,14 +25,26 @@ export async function saveSettings() {
 export function handleSetCommand(arg) {
     const trimmed = arg.trim();
     
+    // Aliases for setting names
+    const aliases = {
+        'rnu': 'relativenumber',
+        'rn': 'relativenumber',
+        'nu': 'number',
+        'st': 'seektime',
+        'stl': 'seektimelarge',
+        'ss': 'speedstep',
+        'vs': 'volumestep',
+    };
+    
     // Handle "no" prefix to disable (e.g., "norelativenumber")
     if (trimmed.startsWith('no')) {
         const setting = trimmed.slice(2);
-        if (setting in state.settings) {
-            state.settings[setting] = false;
+        const resolved = aliases[setting] || setting;
+        if (resolved in state.settings) {
+            state.settings[resolved] = false;
             saveSettings();
             renderCurrentView();
-            updateStatus(`${setting} disabled`);
+            updateStatus(`${resolved} disabled`);
             return;
         }
     }
@@ -40,11 +52,12 @@ export function handleSetCommand(arg) {
     // Handle "setting!" to toggle
     if (trimmed.endsWith('!')) {
         const setting = trimmed.slice(0, -1);
-        if (setting in state.settings) {
-            state.settings[setting] = !state.settings[setting];
+        const resolved = aliases[setting] || setting;
+        if (resolved in state.settings) {
+            state.settings[resolved] = !state.settings[resolved];
             saveSettings();
             renderCurrentView();
-            updateStatus(`${setting} ${state.settings[setting] ? 'enabled' : 'disabled'}`);
+            updateStatus(`${resolved} ${state.settings[resolved] ? 'enabled' : 'disabled'}`);
             return;
         }
     }
@@ -52,8 +65,9 @@ export function handleSetCommand(arg) {
     // Handle "setting?" to query
     if (trimmed.endsWith('?')) {
         const setting = trimmed.slice(0, -1);
-        if (setting in state.settings) {
-            updateStatus(`${setting}=${state.settings[setting]}`);
+        const resolved = aliases[setting] || setting;
+        if (resolved in state.settings) {
+            updateStatus(`${resolved}=${state.settings[resolved]}`);
             return;
         }
     }
@@ -61,50 +75,40 @@ export function handleSetCommand(arg) {
     // Handle "setting=value"
     if (trimmed.includes('=')) {
         const [setting, value] = trimmed.split('=');
-        if (setting in state.settings) {
-            if (value === 'true' || value === '1') {
-                state.settings[setting] = true;
-            } else if (value === 'false' || value === '0') {
-                state.settings[setting] = false;
+        const resolvedSetting = aliases[setting] || setting;
+        if (resolvedSetting in state.settings) {
+            const currentType = typeof state.settings[resolvedSetting];
+            if (currentType === 'boolean') {
+                state.settings[resolvedSetting] = value === 'true' || value === '1';
+            } else if (currentType === 'number') {
+                const num = parseFloat(value);
+                if (!isNaN(num) && num > 0) {
+                    state.settings[resolvedSetting] = num;
+                } else {
+                    updateStatus(`Invalid value for ${resolvedSetting}: must be a positive number`);
+                    return;
+                }
             } else {
-                state.settings[setting] = value;
+                state.settings[resolvedSetting] = value;
             }
             saveSettings();
             renderCurrentView();
-            updateStatus(`${setting}=${state.settings[setting]}`);
+            updateStatus(`${resolvedSetting}=${state.settings[resolvedSetting]}`);
             return;
         }
     }
     
-    // Handle just setting name to enable
-    if (trimmed in state.settings) {
-        state.settings[trimmed] = true;
-        saveSettings();
-        renderCurrentView();
-        updateStatus(`${trimmed} enabled`);
-        return;
-    }
-    
-    // Aliases
-    const aliases = {
-        'rnu': 'relativenumber',
-        'rn': 'relativenumber',
-        'nu': 'number',
-    };
-    
-    if (aliases[trimmed]) {
-        state.settings[aliases[trimmed]] = true;
-        saveSettings();
-        renderCurrentView();
-        updateStatus(`${aliases[trimmed]} enabled`);
-        return;
-    }
-    
-    if (trimmed.startsWith('no') && aliases[trimmed.slice(2)]) {
-        state.settings[aliases[trimmed.slice(2)]] = false;
-        saveSettings();
-        renderCurrentView();
-        updateStatus(`${aliases[trimmed.slice(2)]} disabled`);
+    // Handle just setting name to enable (for boolean settings)
+    const resolvedName = aliases[trimmed] || trimmed;
+    if (resolvedName in state.settings) {
+        if (typeof state.settings[resolvedName] === 'boolean') {
+            state.settings[resolvedName] = true;
+            saveSettings();
+            renderCurrentView();
+            updateStatus(`${resolvedName} enabled`);
+        } else {
+            updateStatus(`${resolvedName}=${state.settings[resolvedName]} (use :set ${resolvedName}=<value> to change)`);
+        }
         return;
     }
     

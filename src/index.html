@@ -152,10 +152,10 @@
                     </div>
                     <div class="help-section">
                         <h3>Seeking</h3>
-                        <div class="shortcut"><kbd>l</kbd> Forward 5s</div>
-                        <div class="shortcut"><kbd>h</kbd> Backward 5s</div>
-                        <div class="shortcut"><kbd>L</kbd> Forward 30s</div>
-                        <div class="shortcut"><kbd>H</kbd> Backward 30s</div>
+                        <div class="shortcut"><kbd>l</kbd> Forward (seektime)</div>
+                        <div class="shortcut"><kbd>h</kbd> Backward (seektime)</div>
+                        <div class="shortcut"><kbd>L</kbd> Forward (seektimelarge)</div>
+                        <div class="shortcut"><kbd>H</kbd> Backward (seektimelarge)</div>
                     </div>
                     <div class="help-section">
                         <h3>Modes</h3>
@@ -165,8 +165,8 @@
                     </div>
                     <div class="help-section">
                         <h3>Speed</h3>
-                        <div class="shortcut"><kbd>]</kbd> Speed up (+0.25x)</div>
-                        <div class="shortcut"><kbd>[</kbd> Speed down (-0.25x)</div>
+                        <div class="shortcut"><kbd>]</kbd> Speed up (speedstep)</div>
+                        <div class="shortcut"><kbd>[</kbd> Speed down (speedstep)</div>
                         <div class="shortcut"><kbd>\</kbd> Reset speed (1.0x)</div>
                     </div>
                     <div class="help-section">
@@ -186,6 +186,13 @@
                         <div class="shortcut"><kbd>A</kbd> Add to queue (play if stopped)</div>
                         <div class="shortcut"><kbd>q</kbd> Open queue view</div>
                         <div class="shortcut"><kbd>dd</kbd> Delete track</div>
+                    </div>
+                    <div class="help-section">
+                        <h3>Visual Mode</h3>
+                        <div class="shortcut"><kbd>v</kbd> Enter visual mode</div>
+                        <div class="shortcut"><kbd>a</kbd> Add selection to queue</div>
+                        <div class="shortcut"><kbd>d</kbd> Delete selected tracks</div>
+                        <div class="shortcut"><kbd>p</kbd> Add to playlist</div>
                     </div>
                     <div class="help-section">
                         <h3>General</h3>
@@ -266,6 +273,13 @@
                         <div class="shortcut"><kbd>:delmark &lt;a-z&gt;</kbd> Delete bookmark</div>
                     </div>
                     <div class="help-section">
+                        <h3>Sorting</h3>
+                        <div class="shortcut"><kbd>:sort name</kbd> Sort by name</div>
+                        <div class="shortcut"><kbd>:sort duration</kbd> Sort by duration</div>
+                        <div class="shortcut"><kbd>:sort path</kbd> Sort by path</div>
+                        <div class="shortcut"><kbd>:sort name!</kbd> Reverse sort</div>
+                    </div>
+                    <div class="help-section">
                         <h3>Track Deletion</h3>
                         <div class="shortcut"><kbd>:[n]d</kbd> Delete track n</div>
                         <div class="shortcut"><kbd>:[n],[m]d</kbd> Delete range</div>
@@ -274,9 +288,11 @@
                         <h3>Settings</h3>
                         <div class="shortcut"><kbd>:set rnu</kbd> Relative line numbers</div>
                         <div class="shortcut"><kbd>:set nornu</kbd> Disable relative</div>
+                        <div class="shortcut"><kbd>:set st=10</kbd> Seek time (default 5s)</div>
+                        <div class="shortcut"><kbd>:set stl=60</kbd> Large seek (default 30s)</div>
+                        <div class="shortcut"><kbd>:set ss=0.5</kbd> Speed step (default 0.25)</div>
+                        <div class="shortcut"><kbd>:set vs=0.1</kbd> Volume step (default 0.05)</div>
                         <div class="shortcut"><kbd>:set</kbd> Show all settings</div>
-                        <div class="shortcut"><kbd>3j / 5k</kbd> Jump N lines (Vim-style)</div>
-                        <div class="shortcut"><kbd>5G</kbd> Go to line 5</div>
                     </div>
                     <div class="help-section">
                         <h3>General</h3>

@@ -36,17 +36,17 @@ A minimal, VIM-style music player built with Tauri and vanilla JavaScript.
 ### Volume
 | Key | Action |
 |-----|--------|
-| `+` / `=` | Volume up |
-| `-` | Volume down |
+| `+` / `=` | Volume up (configurable: `volumestep`) |
+| `-` | Volume down (configurable: `volumestep`) |
 | `M` (Shift+m) | Mute/Unmute |
 
 ### Seeking
 | Key | Action |
 |-----|--------|
-| `l` | Seek forward 5 seconds |
-| `h` | Seek backward 5 seconds |
-| `L` (Shift+l) | Seek forward 30 seconds |
-| `H` (Shift+h) | Seek backward 30 seconds |
+| `l` | Seek forward (configurable: `seektime`, default 5s) |
+| `h` | Seek backward (configurable: `seektime`, default 5s) |
+| `L` (Shift+l) | Seek forward large (configurable: `seektimelarge`, default 30s) |
+| `H` (Shift+h) | Seek backward large (configurable: `seektimelarge`, default 30s) |
 
 ### Repeat & Shuffle
 | Key | Action |
@@ -57,8 +57,8 @@ A minimal, VIM-style music player built with Tauri and vanilla JavaScript.
 ### Speed
 | Key | Action |
 |-----|--------|
-| `]` | Increase speed (+0.25x) |
-| `[` | Decrease speed (-0.25x) |
+| `]` | Increase speed (configurable: `speedstep`, default +0.25x) |
+| `[` | Decrease speed (configurable: `speedstep`, default -0.25x) |
 | `\` | Reset speed to 1.0x |
 
 ### A-B Loop
@@ -142,6 +142,7 @@ Browse your library by artist. Use `:artists` to enter this view.
 | `j` / `k` | Extend selection up/down |
 | `gg` / `G` | Extend to top/bottom |
 | `a` | Add selection to queue |
+| `d` | Delete selected tracks from playlist |
 | `p` | Add selection to playlist |
 | `v` / `Esc` | Exit visual mode |
 
@@ -200,10 +201,16 @@ Press `:` to enter command mode. Available commands:
 
 ### Settings
 
-| Setting | Alias | Description |
-|---------|-------|-------------|
-| `relativenumber` | `rnu` | Show relative line numbers |
-| `number` | `nu` | Show line numbers |
+| Setting | Alias | Default | Description |
+|---------|-------|---------|-------------|
+| `relativenumber` | `rnu` | `false` | Show relative line numbers |
+| `number` | `nu` | `true` | Show line numbers |
+| `seektime` | `st` | `5` | Seek step in seconds (`l`/`h`) |
+| `seektimelarge` | `stl` | `30` | Large seek step in seconds (`L`/`H`) |
+| `speedstep` | `ss` | `0.25` | Speed change step (`]`/`[`) |
+| `volumestep` | `vs` | `0.05` | Volume change step (`+`/`-`) |
+
+Numeric settings are changed with `:set <setting>=<value>`, e.g., `:set seektime=10`.
 
 Settings are persisted in `~/.config/vi-music/settings.json`.
 
