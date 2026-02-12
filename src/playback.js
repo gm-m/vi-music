@@ -177,7 +177,11 @@ export async function setSpeed(speed) {
 // Seeking
 export async function seekRelative(delta) {
     try {
-        await invoke('seek_relative', { delta });
+        const newPos = await invoke('seek_relative', { delta });
+        if (state.isPaused) {
+            state.elapsed = newPos;
+            updateProgressDisplay();
+        }
     } catch (err) {
         // Ignore if not playing
     }
@@ -185,7 +189,11 @@ export async function seekRelative(delta) {
 
 export async function seekTo(position) {
     try {
-        await invoke('seek', { position });
+        const newPos = await invoke('seek', { position });
+        if (state.isPaused) {
+            state.elapsed = newPos;
+            updateProgressDisplay();
+        }
     } catch (err) {
         // Ignore if not playing
     }

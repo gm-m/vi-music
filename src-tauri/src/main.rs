@@ -349,12 +349,14 @@ impl AudioPlayer {
                 OutputStream::try_default().ok()
             }
             
-            fn play_file(path: &str, volume: f32, seek_secs: u64, stream_handle: &rodio::OutputStreamHandle) -> Option<Sink> {
+            fn play_file(path: &str, volume: f32, seek_secs: u64, stream_handle: &rodio::OutputStreamHandle, start_paused: bool) -> Option<Sink> {
                 use std::path::Path;
                 
                 let ext = Path::new(path).extension()?.to_str()?.to_lowercase();
                 let sink = Sink::try_new(stream_handle).ok()?;
                 sink.set_volume(volume);
+                // Start paused so no audio plays until caller sets start_time
+                sink.pause();
                 
                 if ext == "flac" {
                     // FLAC: use custom symphonia source for fast seeking
@@ -368,6 +370,10 @@ impl AudioPlayer {
                     if seek_secs > 0 {
                         let _ = sink.try_seek(Duration::from_secs(seek_secs));
                     }
+                }
+                // Only start playing if caller doesn't want it paused
+                if !start_paused {
+                    sink.play();
                 }
                 Some(sink)
             }
@@ -394,7 +400,7 @@ impl AudioPlayer {
                             // Try to play, recreating output stream if needed
                             let mut played = false;
                             if let Some(ref handle) = audio_output.as_ref().map(|(_, h)| h) {
-                                if let Some(sink) = play_file(&path, volume, skip_secs, handle) {
+                                if let Some(sink) = play_file(&path, volume, skip_secs, handle, false) {
                                     current_sink = Some(sink);
                                     played = true;
                                 }
@@ -404,7 +410,7 @@ impl AudioPlayer {
                             if !played {
                                 audio_output = create_output_for_device(&selected_device_name);
                                 if let Some(ref handle) = audio_output.as_ref().map(|(_, h)| h) {
-                                    if let Some(sink) = play_file(&path, volume, skip_secs, handle) {
+                                    if let Some(sink) = play_file(&path, volume, skip_secs, handle, false) {
                                         current_sink = Some(sink);
                                         played = true;
                                     }
@@ -469,6 +475,7 @@ impl AudioPlayer {
                         }
                         AudioCommand::Seek(position) => {
                             let state = state_clone.lock().unwrap();
+                            let was_paused = state.is_paused;
                             if let Some(ref path) = state.current_path.clone() {
                                 let ext = std::path::Path::new(&path)
                                     .extension()
@@ -492,8 +499,18 @@ impl AudioPlayer {
                                     // Fast seek worked, just update the state
                                     drop(state);
                                     let mut state = state_clone.lock().unwrap();
-                                    state.start_time = Some(Instant::now());
-                                    state.start_position = position;
+                                    if was_paused {
+                                        let now = Instant::now();
+                                        state.start_time = Some(now);
+                                        state.pause_time = Some(now);
+                                        state.start_position = position;
+                                        state.is_paused = true;
+                                        state.is_finished = false;
+                                    } else {
+                                        state.start_time = Some(Instant::now());
+                                        state.start_position = position;
+                                        state.is_finished = false;
+                                    }
                                 } else {
                                     // Recreate sink with seek position
                                     let volume = if let Some(ref sink) = current_sink {
@@ -508,9 +525,10 @@ impl AudioPlayer {
                                     }
                                     
                                     // Try with current output, recreate if needed
+                                    // Sink starts paused so we can set start_time before audio plays
                                     let mut played = false;
                                     if let Some(ref handle) = audio_output.as_ref().map(|(_, h)| h) {
-                                        if let Some(sink) = play_file(&path, volume, position, handle) {
+                                        if let Some(sink) = play_file(&path, volume, position, handle, true) {
                                             current_sink = Some(sink);
                                             played = true;
                                         }
@@ -519,7 +537,7 @@ impl AudioPlayer {
                                     if !played {
                                         audio_output = create_output_for_device(&selected_device_name);
                                         if let Some(ref handle) = audio_output.as_ref().map(|(_, h)| h) {
-                                            if let Some(sink) = play_file(&path, volume, position, handle) {
+                                            if let Some(sink) = play_file(&path, volume, position, handle, true) {
                                                 current_sink = Some(sink);
                                                 played = true;
                                             }
@@ -527,12 +545,29 @@ impl AudioPlayer {
                                     }
                                     
                                     if played {
-                                        let mut state = state_clone.lock().unwrap();
-                                        state.start_time = Some(Instant::now());
-                                        state.start_position = position;
-                                        state.is_paused = false;
-                                        state.pause_time = None;
-                                        state.is_finished = false;
+                                        if was_paused {
+                                            // Keep paused — sink is already paused from play_file
+                                            let now = Instant::now();
+                                            let mut state = state_clone.lock().unwrap();
+                                            state.start_time = Some(now);
+                                            state.start_position = position;
+                                            state.is_paused = true;
+                                            state.pause_time = Some(now);
+                                            state.is_finished = false;
+                                        } else {
+                                            // Set start_time BEFORE unpausing so elapsed is accurate
+                                            let mut state = state_clone.lock().unwrap();
+                                            state.start_time = Some(Instant::now());
+                                            state.start_position = position;
+                                            state.is_paused = false;
+                                            state.pause_time = None;
+                                            state.is_finished = false;
+                                            drop(state);
+                                            // Now unpause — audio starts exactly when start_time is set
+                                            if let Some(ref sink) = current_sink {
+                                                sink.play();
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -567,7 +602,7 @@ impl AudioPlayer {
                             if was_playing {
                                 if let Some(ref path) = current_path {
                                     if let Some(ref handle) = audio_output.as_ref().map(|(_, h)| h) {
-                                        if let Some(sink) = play_file(path, volume, current_position, handle) {
+                                        if let Some(sink) = play_file(path, volume, current_position, handle, false) {
                                             current_sink = Some(sink);
                                             
                                             let mut state = state_clone.lock().unwrap();
