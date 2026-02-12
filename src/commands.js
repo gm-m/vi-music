@@ -314,6 +314,13 @@ export function executeCommand(cmd) {
                 showAudioDevices();
             }
             break;
+        case 'sort':
+            if (parts[1]) {
+                sortPlaylist(parts[1]);
+            } else {
+                updateStatus('Usage: :sort name | duration | path (append ! to reverse)');
+            }
+            break;
         case 'set':
             if (parts[1]) {
                 handleSetCommand(parts.slice(1).join(' '));
@@ -356,6 +363,63 @@ async function clearDefaultFolder() {
     } catch (err) {
         console.error('Failed to clear default folder:', err);
     }
+}
+
+function sortPlaylist(field) {
+    if (state.playlist.length === 0) {
+        updateStatus('No tracks to sort');
+        return;
+    }
+    
+    const reverse = field.endsWith('!');
+    const key = reverse ? field.slice(0, -1) : field;
+    
+    // Remember the currently playing track path so we can fix playingIndex after sort
+    const playingPath = state.playingIndex >= 0 ? state.playlist[state.playingIndex]?.path : null;
+    const selectedPath = state.playlist[state.selectedIndex]?.path;
+    
+    let compareFn;
+    switch (key) {
+        case 'name':
+            compareFn = (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+            break;
+        case 'duration':
+            compareFn = (a, b) => (a.duration || 0) - (b.duration || 0);
+            break;
+        case 'path':
+            compareFn = (a, b) => a.path.localeCompare(b.path, undefined, { sensitivity: 'base' });
+            break;
+        default:
+            updateStatus(`Unknown sort field: ${key}. Use name, duration, or path`);
+            return;
+    }
+    
+    if (reverse) {
+        const original = compareFn;
+        compareFn = (a, b) => original(b, a);
+    }
+    
+    state.playlist.sort(compareFn);
+    
+    // Restore playingIndex and selectedIndex by path
+    if (playingPath) {
+        state.playingIndex = state.playlist.findIndex(t => t.path === playingPath);
+    }
+    if (selectedPath) {
+        state.selectedIndex = state.playlist.findIndex(t => t.path === selectedPath);
+        if (state.selectedIndex < 0) state.selectedIndex = 0;
+    }
+    
+    // Update queue indices (they reference playlist positions which have changed)
+    // Clear queue since indices are now invalid
+    if (state.queue.length > 0) {
+        state.queue = [];
+        updateStatus(`Sorted by ${key}${reverse ? ' (reversed)' : ''} — queue cleared`);
+    } else {
+        updateStatus(`Sorted by ${key}${reverse ? ' (reversed)' : ''}`);
+    }
+    
+    renderPlaylist();
 }
 
 export async function goBack() {

@@ -192,6 +192,8 @@ Press `:` to enter command mode. Available commands:
 - `:set no<option>` - Disable a setting (e.g., `:set norelativenumber`)
 - `:set <option>!` - Toggle a setting
 - `:set <option>?` - Query a setting value
+- `:sort <field>` - Sort playlist (fields: `name`, `duration`, `path`)
+- `:sort <field>!` - Sort in reverse order (e.g., `:sort name!`)
 - `:set` - Show all current settings
 - `:help` or `:h` - Show help
 - `:quit` or `:q` - Quit application
