@@ -1582,6 +1582,37 @@ fn scan_folder_recursive(dir: &PathBuf, tracks: &mut Vec<TrackInfo>) {
     }
 }
 
+#[tauri::command]
+fn reveal_in_explorer(path: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .args(["/select,", &path])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .args(["-R", &path])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        // Try common file managers with selection support
+        let parent = std::path::Path::new(&path)
+            .parent()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|| path.clone());
+        std::process::Command::new("xdg-open")
+            .arg(&parent)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 fn main() {
     let app_state = AppState::new();
     
@@ -1624,6 +1655,7 @@ fn main() {
             scan_metadata,
             get_artists,
             get_artist_tracks,
+            reveal_in_explorer,
         ])
         .setup(|app| {
             // Initialize media controls

@@ -113,6 +113,7 @@ A minimal, VIM-style music player built with Tauri and vanilla JavaScript.
 | `R` (Shift+r) | Reload folder content |
 | `Tab` | Toggle list/folder view |
 | `Backspace` | Go up folder (in folder view) |
+| `gf` | Reveal selected track in file explorer |
 | `:` | Enter command mode |
 | `?` | Toggle help |
 | `Esc` | Close modals / Exit mode |
@@ -193,6 +194,7 @@ Press `:` to enter command mode. Available commands:
 - `:set no<option>` - Disable a setting (e.g., `:set norelativenumber`)
 - `:set <option>!` - Toggle a setting
 - `:set <option>?` - Query a setting value
+- `:reveal` or `:rv` - Reveal selected track in file explorer
 - `:sort <field>` - Sort playlist (fields: `name`, `duration`, `path`)
 - `:sort <field>!` - Sort in reverse order (e.g., `:sort name!`)
 - `:set` - Show all current settings

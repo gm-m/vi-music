@@ -314,6 +314,10 @@ export function executeCommand(cmd) {
                 showAudioDevices();
             }
             break;
+        case 'reveal':
+        case 'rv':
+            revealInExplorer();
+            break;
         case 'sort':
             if (parts[1]) {
                 sortPlaylist(parts[1]);
@@ -420,6 +424,42 @@ function sortPlaylist(field) {
     }
     
     renderPlaylist();
+}
+
+export async function revealInExplorer() {
+    let path = null;
+    
+    if (state.viewMode === 'list') {
+        const track = state.filteredPlaylist.length > 0
+            ? state.filteredPlaylist[state.selectedIndex]
+            : state.playlist[state.selectedIndex];
+        path = track?.path;
+    } else if (state.viewMode === 'folder') {
+        const contents = state.filteredFolderContents.length > 0
+            ? state.filteredFolderContents
+            : state.folderContents;
+        const item = contents[state.folderSelectedIndex];
+        path = item?.path;
+    } else if (state.viewMode === 'artist') {
+        if (state.artistViewMode === 'tracks') {
+            const tracks = state.filteredArtistItems.length > 0
+                ? state.filteredArtistItems.map(f => state.artistTracks[f.index])
+                : state.artistTracks;
+            path = tracks[state.artistSelectedIndex]?.path;
+        }
+    }
+    
+    if (!path) {
+        updateStatus('No track selected');
+        return;
+    }
+    
+    try {
+        await invoke('reveal_in_explorer', { path });
+        updateStatus(`Revealed: ${path.split(/[\\/]/).pop()}`);
+    } catch (err) {
+        updateStatus(`Failed to reveal: ${err}`);
+    }
 }
 
 export async function goBack() {

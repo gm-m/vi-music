@@ -3,7 +3,7 @@ import { closeModals, toggleHelp } from './ui.js';
 import { getKeyString, getKeyAction } from './keybindings.js';
 import { moveSelection, goToTop, goToBottom, selectTrack, scrollToSelected } from './navigation.js';
 import { playSelected, togglePause, stop, nextTrack, prevTrack, adjustVolume, toggleMute, changeSpeed, resetSpeed, seekRelative, toggleRepeat, toggleShuffle } from './playback.js';
-import { enterCommandMode, goBack } from './commands.js';
+import { enterCommandMode, goBack, revealInExplorer } from './commands.js';
 import { enterFilterMode, clearFilter, jumpToNextMatch, jumpToPrevMatch } from './filter.js';
 import { enterVisualMode, handleVisualModeKeyDown, deleteSelectedTracks } from './visual.js';
 import { handleQueueViewKeyDown, addToQueue, toggleQueueView } from './queue.js';
@@ -163,6 +163,8 @@ export function handleKeyDown(e) {
             } else {
                 goToTop();
             }
+        } else if (e.key === 'f') {
+            revealInExplorer();
         }
         state.pendingKey = null;
         state.countPrefix = '';
