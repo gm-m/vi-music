@@ -373,8 +373,11 @@ export async function setupMediaControlListener(listen) {
     if (!listen) return;
     
     await listen('media-control', (event) => {
-        console.log('Media control event:', event.payload);
-        switch (event.payload) {
+        const payload = typeof event.payload === 'string'
+            ? { action: event.payload, position: null, delta: null }
+            : event.payload;
+        console.log('Media control event:', payload);
+        switch (payload.action) {
             case 'play':
                 if (state.isPaused) {
                     togglePause();
@@ -398,6 +401,22 @@ export async function setupMediaControlListener(listen) {
                 break;
             case 'stop':
                 stop();
+                break;
+            case 'setPosition':
+                if (typeof payload.position === 'number') {
+                    seekTo(payload.position);
+                }
+                break;
+            case 'seekBy':
+                if (typeof payload.delta === 'number' && payload.delta !== 0) {
+                    seekRelative(payload.delta);
+                }
+                break;
+            case 'seekForward':
+                seekRelative(state.settings.seektime);
+                break;
+            case 'seekBackward':
+                seekRelative(-state.settings.seektime);
                 break;
         }
     });

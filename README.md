@@ -10,6 +10,7 @@ A minimal, VIM-style music player built with Tauri and vanilla JavaScript.
 - **Command mode** for advanced operations
 - **Regex-based, incremental search** to quickly find tracks as you type
 - **Track duration display** in the playlist
+- **System media controls support** including play/pause/next/previous and seek from integrations like KDE Connect
 
 ## Keyboard Shortcuts
 

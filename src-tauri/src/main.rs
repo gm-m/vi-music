@@ -9,10 +9,10 @@ use std::path::PathBuf;
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tauri::{Manager, State};
 use walkdir::WalkDir;
-use souvlaki::{MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, PlatformConfig};
+use souvlaki::{MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, MediaPosition, PlatformConfig, SeekDirection};
 
 // Symphonia imports for fast FLAC seeking
 use symphonia::core::audio::SampleBuffer;
@@ -673,12 +673,17 @@ impl AppState {
     fn update_media_playback(&self, playing: bool, paused: bool) {
         if let Ok(mut controls) = self.media_controls.lock() {
             if let Some(ref mut mc) = *controls {
+                let progress = if playing {
+                    Some(MediaPosition(Duration::from_secs(self.player.get_elapsed())))
+                } else {
+                    None
+                };
                 let playback = if !playing {
                     MediaPlayback::Stopped
                 } else if paused {
-                    MediaPlayback::Paused { progress: None }
+                    MediaPlayback::Paused { progress }
                 } else {
-                    MediaPlayback::Playing { progress: None }
+                    MediaPlayback::Playing { progress }
                 };
                 let _ = mc.set_playback(playback);
             }
@@ -706,6 +711,13 @@ struct TrackInfo {
     name: String,
     index: usize,
     duration: Option<u64>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+struct MediaControlPayload {
+    action: String,
+    position: Option<u64>,
+    delta: Option<i64>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -1685,22 +1697,76 @@ fn main() {
                     let _ = controls.attach(move |event: MediaControlEvent| {
                         match event {
                             MediaControlEvent::Play => {
-                                let _ = app_handle.emit_all("media-control", "play");
+                                let _ = app_handle.emit_all("media-control", MediaControlPayload {
+                                    action: "play".to_string(),
+                                    position: None,
+                                    delta: None,
+                                });
                             }
                             MediaControlEvent::Pause => {
-                                let _ = app_handle.emit_all("media-control", "pause");
+                                let _ = app_handle.emit_all("media-control", MediaControlPayload {
+                                    action: "pause".to_string(),
+                                    position: None,
+                                    delta: None,
+                                });
                             }
                             MediaControlEvent::Toggle => {
-                                let _ = app_handle.emit_all("media-control", "toggle");
+                                let _ = app_handle.emit_all("media-control", MediaControlPayload {
+                                    action: "toggle".to_string(),
+                                    position: None,
+                                    delta: None,
+                                });
                             }
                             MediaControlEvent::Next => {
-                                let _ = app_handle.emit_all("media-control", "next");
+                                let _ = app_handle.emit_all("media-control", MediaControlPayload {
+                                    action: "next".to_string(),
+                                    position: None,
+                                    delta: None,
+                                });
                             }
                             MediaControlEvent::Previous => {
-                                let _ = app_handle.emit_all("media-control", "prev");
+                                let _ = app_handle.emit_all("media-control", MediaControlPayload {
+                                    action: "prev".to_string(),
+                                    position: None,
+                                    delta: None,
+                                });
                             }
                             MediaControlEvent::Stop => {
-                                let _ = app_handle.emit_all("media-control", "stop");
+                                let _ = app_handle.emit_all("media-control", MediaControlPayload {
+                                    action: "stop".to_string(),
+                                    position: None,
+                                    delta: None,
+                                });
+                            }
+                            MediaControlEvent::SetPosition(MediaPosition(position)) => {
+                                let _ = app_handle.emit_all("media-control", MediaControlPayload {
+                                    action: "setPosition".to_string(),
+                                    position: Some(position.as_secs()),
+                                    delta: None,
+                                });
+                            }
+                            MediaControlEvent::SeekBy(direction, amount) => {
+                                let seconds = amount.as_secs() as i64;
+                                let delta = match direction {
+                                    SeekDirection::Forward => seconds,
+                                    SeekDirection::Backward => -seconds,
+                                };
+                                let _ = app_handle.emit_all("media-control", MediaControlPayload {
+                                    action: "seekBy".to_string(),
+                                    position: None,
+                                    delta: Some(delta),
+                                });
+                            }
+                            MediaControlEvent::Seek(direction) => {
+                                let action = match direction {
+                                    SeekDirection::Forward => "seekForward",
+                                    SeekDirection::Backward => "seekBackward",
+                                };
+                                let _ = app_handle.emit_all("media-control", MediaControlPayload {
+                                    action: action.to_string(),
+                                    position: None,
+                                    delta: None,
+                                });
                             }
                             _ => {}
                         }
