@@ -28,8 +28,26 @@ export async function playSelected() {
     await playTrack(state.selectedIndex);
 }
 
-export async function playTrack(index, seekPosition = 0) {
+function getTrackStartPosition(index, seekPosition, allowCarryPosition) {
+    if (typeof seekPosition === 'number') {
+        return seekPosition;
+    }
+    if (!allowCarryPosition || !state.settings.carryposition) {
+        return 0;
+    }
+    if (!state.isPlaying || state.playingIndex < 0 || state.playingIndex === index) {
+        return 0;
+    }
+    const targetDuration = state.playlist[index]?.duration;
+    if (typeof targetDuration === 'number') {
+        return Math.min(state.elapsed, targetDuration);
+    }
+    return state.elapsed;
+}
+
+export async function playTrack(index, seekPosition = null, allowCarryPosition = true) {
     try {
+        const startPosition = getTrackStartPosition(index, seekPosition, allowCarryPosition);
         // Clear A-B loop when changing tracks
         if (state.playingIndex !== index) {
             state.loopA = null;
@@ -38,12 +56,12 @@ export async function playTrack(index, seekPosition = 0) {
             updateLoopDisplay();
         }
         
-        const result = await invoke('play_track', { index, skipSecs: seekPosition });
+        const result = await invoke('play_track', { index, skipSecs: startPosition });
         state.playingIndex = index;
         state.isPlaying = true;
         state.isPaused = false;
         state.duration = result.duration;
-        state.elapsed = seekPosition;
+        state.elapsed = startPosition;
         updateNowPlaying(result.name);
         renderCurrentView();
         updatePlayButton();
@@ -90,17 +108,13 @@ export async function nextTrack() {
         playNextShuffle();
         return;
     }
+    if (state.playlist.length === 0) return;
     
     try {
-        const result = await invoke('next_track');
-        state.playingIndex = result.index;
-        state.selectedIndex = result.index;
-        state.isPlaying = true;
-        state.isPaused = false;
-        state.duration = result.duration;
-        updateNowPlaying(result.name);
-        renderCurrentView();
-        updatePlayButton();
+        const currentIndex = state.playingIndex >= 0 ? state.playingIndex : state.selectedIndex;
+        const nextIndex = (currentIndex + 1) % state.playlist.length;
+        state.selectedIndex = nextIndex;
+        await playTrack(nextIndex);
         scrollToSelected();
     } catch (err) {
         console.error('Failed to play next track:', err);
@@ -112,17 +126,13 @@ export async function prevTrack() {
         playPrevShuffle();
         return;
     }
+    if (state.playlist.length === 0) return;
     
     try {
-        const result = await invoke('prev_track');
-        state.playingIndex = result.index;
-        state.selectedIndex = result.index;
-        state.isPlaying = true;
-        state.isPaused = false;
-        state.duration = result.duration;
-        updateNowPlaying(result.name);
-        renderCurrentView();
-        updatePlayButton();
+        const currentIndex = state.playingIndex >= 0 ? state.playingIndex : state.selectedIndex;
+        const prevIndex = currentIndex === 0 ? state.playlist.length - 1 : currentIndex - 1;
+        state.selectedIndex = prevIndex;
+        await playTrack(prevIndex);
         scrollToSelected();
     } catch (err) {
         console.error('Failed to play previous track:', err);
@@ -248,25 +258,25 @@ export function handleTrackEnd() {
     // Check queue first (unless repeat-one is active)
     if (state.repeatMode !== 'one' && state.queue.length > 0) {
         const nextIndex = state.queue.shift();
-        playTrack(nextIndex);
+        playTrack(nextIndex, 0, false);
         updateQueueDisplay();
         return;
     }
     
     if (state.repeatMode === 'one') {
         // Repeat current track
-        playTrack(state.playingIndex);
+        playTrack(state.playingIndex, 0, false);
     } else if (state.shuffleMode) {
         // Play random track
-        playNextShuffle();
+        playNextShuffle(false);
     } else if (state.repeatMode === 'all') {
         // Play next, wrap around
         const nextIndex = (state.playingIndex + 1) % state.playlist.length;
-        playTrack(nextIndex);
+        playTrack(nextIndex, 0, false);
     } else {
         // No repeat - play next if not at end
         if (state.playingIndex < state.playlist.length - 1) {
-            playTrack(state.playingIndex + 1);
+            playTrack(state.playingIndex + 1, 0, false);
         } else {
             // End of playlist
             state.isPlaying = false;
@@ -276,13 +286,14 @@ export function handleTrackEnd() {
     }
 }
 
-export function playNextShuffle() {
+export function playNextShuffle(allowCarryPosition = true) {
     if (state.playlist.length === 0) return;
     
     // If we're not at the end of history, go forward
     if (state.shuffleIndex < state.shuffleHistory.length - 1) {
         state.shuffleIndex++;
-        playTrack(state.shuffleHistory[state.shuffleIndex]);
+        state.selectedIndex = state.shuffleHistory[state.shuffleIndex];
+        playTrack(state.shuffleHistory[state.shuffleIndex], null, allowCarryPosition);
         return;
     }
     
@@ -298,7 +309,8 @@ export function playNextShuffle() {
     
     state.shuffleHistory.push(nextIndex);
     state.shuffleIndex = state.shuffleHistory.length - 1;
-    playTrack(nextIndex);
+    state.selectedIndex = nextIndex;
+    playTrack(nextIndex, null, allowCarryPosition);
 }
 
 export function playPrevShuffle() {
@@ -306,6 +318,7 @@ export function playPrevShuffle() {
         return;
     }
     state.shuffleIndex--;
+    state.selectedIndex = state.shuffleHistory[state.shuffleIndex];
     playTrack(state.shuffleHistory[state.shuffleIndex]);
 }
 

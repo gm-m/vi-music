@@ -34,6 +34,7 @@ export function handleSetCommand(arg) {
         'stl': 'seektimelarge',
         'ss': 'speedstep',
         'vs': 'volumestep',
+        'cp': 'carryposition',
     };
     
     // Handle "no" prefix to disable (e.g., "norelativenumber")

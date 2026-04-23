@@ -65,6 +65,7 @@ export const state = {
         seektimelarge: 30, // Large seek step in seconds (L/H)
         speedstep: 0.25, // Speed change step (]/[)
         volumestep: 0.05, // Volume change step (+/-)
+        carryposition: false, // Keep current playback position when manually changing tracks
     },
 };
 

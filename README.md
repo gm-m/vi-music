@@ -11,6 +11,7 @@ A minimal, VIM-style music player built with Tauri and vanilla JavaScript.
 - **Regex-based, incremental search** to quickly find tracks as you type
 - **Track duration display** in the playlist
 - **System media controls support** including play/pause/next/previous and seek from integrations like KDE Connect
+- **Optional carry-position mode** to keep the same timestamp when manually switching tracks
 
 ## Keyboard Shortcuts
 
@@ -212,6 +213,7 @@ Press `:` to enter command mode. Available commands:
 | `seektimelarge` | `stl` | `30` | Large seek step in seconds (`L`/`H`) |
 | `speedstep` | `ss` | `0.25` | Speed change step (`]`/`[`) |
 | `volumestep` | `vs` | `0.05` | Volume change step (`+`/`-`) |
+| `carryposition` | `cp` | `false` | Keep the current playback timestamp when manually changing tracks |
 
 Numeric settings are changed with `:set <setting>=<value>`, e.g., `:set seektime=10`.
 
