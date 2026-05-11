@@ -62,6 +62,17 @@ export function renderArtistView() {
     scrollToSelected();
 }
 
+function getArtistItemCount() {
+    return state.artistViewMode === 'list' ? state.artistList.length : state.artistTracks.length;
+}
+
+function moveArtistSelection(delta) {
+    const itemCount = getArtistItemCount();
+    if (itemCount === 0) return;
+    state.artistSelectedIndex = Math.max(0, Math.min(itemCount - 1, state.artistSelectedIndex + delta));
+    renderArtistView();
+}
+
 function renderArtistList() {
     if (state.artistList.length === 0) {
         elements.playlist.innerHTML = `
@@ -194,20 +205,12 @@ function renderArtistTrackList() {
 export function handleArtistViewKeyDown(e) {
     switch (e.key) {
         case 'j':
-            state.artistSelectedIndex = Math.min(
-                state.artistSelectedIndex + (parseInt(state.countPrefix) || 1),
-                (state.artistViewMode === 'list' ? state.artistList.length : state.artistTracks.length) - 1
-            );
+            moveArtistSelection(parseInt(state.countPrefix) || 1);
             state.countPrefix = '';
-            renderArtistView();
             break;
         case 'k':
-            state.artistSelectedIndex = Math.max(
-                state.artistSelectedIndex - (parseInt(state.countPrefix) || 1),
-                0
-            );
+            moveArtistSelection(-(parseInt(state.countPrefix) || 1));
             state.countPrefix = '';
-            renderArtistView();
             break;
         case 'Enter':
             if (state.artistViewMode === 'list') {
@@ -289,7 +292,10 @@ export function handleArtistViewKeyDown(e) {
             const keyString = getKeyString(e);
             const action = getKeyAction(keyString) || getKeyAction(e.key);
             if (action) {
+                const count = parseInt(state.countPrefix) || 1;
                 switch (action) {
+                    case 'pageDown': e?.preventDefault(); moveArtistSelection(10 * count); state.countPrefix = ''; break;
+                    case 'pageUp': e?.preventDefault(); moveArtistSelection(-10 * count); state.countPrefix = ''; break;
                     case 'togglePause': e?.preventDefault(); togglePause(); break;
                     case 'stop': stop(); break;
                     case 'nextTrack': nextTrack(); break;

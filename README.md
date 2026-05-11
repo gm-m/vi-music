@@ -25,6 +25,7 @@ A minimal, VIM-style music player built with Tauri and vanilla JavaScript.
 | `5gg` | Go to line 5 |
 | `G` | Go to last track |
 | `5G` | Go to line 5 |
+| `Ctrl+d` / `Ctrl+u` | Page down/up |
 
 ### Playback
 | Key | Action |
@@ -157,6 +158,8 @@ Browse your library by artist. Use `:artists` to enter this view.
 ## Command Mode
 
 Press `:` to enter command mode. Available commands:
+
+Press `Tab` in command mode to autocomplete command names.
 
 - `:open` or `:o` - Open folder dialog
 - `:play [n]` or `:p [n]` - Play track number n

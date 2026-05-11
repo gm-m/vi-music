@@ -13,6 +13,78 @@ import { savePlaylist, loadSavedPlaylist, renamePlaylist, deletePlaylist, showPl
 import { deleteTrackRange } from './visual.js';
 import { invoke, open } from './tauri.js';
 
+const COMMAND_COMPLETIONS = [
+    'q', 'quit',
+    'open', 'o',
+    'reload', 'r',
+    'play', 'p',
+    'stop',
+    'next', 'n',
+    'prev',
+    'vol', 'volume',
+    'help', 'h',
+    'setdefault', 'sd',
+    'cleardefault', 'cd',
+    'save', 'w',
+    'load', 'e',
+    'playlists', 'pl',
+    'delplaylist', 'dp',
+    'rename', 'rn',
+    'sleep',
+    'mark',
+    'marks',
+    'delmark', 'dm',
+    'jump', 'j',
+    'addlib', 'al',
+    'libs', 'library',
+    'removelib', 'rl',
+    'scanlib', 'scan', 'sl',
+    'back', 'b',
+    'artists', 'ar',
+    'devices', 'dev',
+    'device', 'd',
+    'reveal', 'rv',
+    'sort',
+    'set',
+];
+
+function getCommonPrefix(values) {
+    if (values.length === 0) return '';
+    return values.reduce((prefix, value) => {
+        let i = 0;
+        while (i < prefix.length && i < value.length && prefix[i] === value[i]) {
+            i++;
+        }
+        return prefix.slice(0, i);
+    });
+}
+
+function autocompleteCommandInput() {
+    const value = elements.commandInput.value;
+    const leading = value.match(/^\s*/)[0];
+    const rest = value.slice(leading.length);
+    const commandMatch = rest.match(/^(\S*)(.*)$/);
+    const current = commandMatch ? commandMatch[1].toLowerCase() : '';
+    const suffix = commandMatch ? commandMatch[2] : '';
+    const matches = COMMAND_COMPLETIONS.filter(command => command.startsWith(current));
+    
+    if (matches.length === 0) {
+        updateStatus(`No command matches: ${current}`);
+        return;
+    }
+    
+    if (matches.length === 1) {
+        elements.commandInput.value = `${leading}${matches[0]}${suffix || ' '}`;
+        return;
+    }
+    
+    const commonPrefix = getCommonPrefix(matches);
+    if (commonPrefix.length > current.length) {
+        elements.commandInput.value = `${leading}${commonPrefix}${suffix}`;
+    }
+    updateStatus(`Matches: ${matches.join(', ')}`);
+}
+
 // Command Mode
 export function enterCommandMode() {
     state.mode = 'command';
@@ -38,6 +110,9 @@ export function handleCommandInput(e) {
         e.preventDefault();
         executeCommand(elements.commandInput.value);
         exitCommandMode();
+    } else if (e.key === 'Tab') {
+        e.preventDefault();
+        autocompleteCommandInput();
     } else if (e.key === 'Escape') {
         e.preventDefault();
         exitCommandMode();
