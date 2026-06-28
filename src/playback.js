@@ -193,7 +193,7 @@ export async function seekRelative(delta) {
             updateProgressDisplay();
         }
     } catch (err) {
-        // Ignore if not playing
+        console.error('seek_relative failed:', err);
     }
 }
 
@@ -205,7 +205,7 @@ export async function seekTo(position) {
             updateProgressDisplay();
         }
     } catch (err) {
-        // Ignore if not playing
+        console.error('seek failed:', err);
     }
 }
 

@@ -182,8 +182,8 @@ impl PlaybackState {
     }
 }
 
-// Custom FLAC source using symphonia for fast seeking
-struct SymphoniaFlacSource {
+// Custom symphonia source for fast seeking (FLAC, MP3, etc.)
+struct SymphoniaSource {
     decoder: Box<dyn symphonia::core::codecs::Decoder>,
     format: Box<dyn symphonia::core::formats::FormatReader>,
     track_id: u32,
@@ -191,15 +191,19 @@ struct SymphoniaFlacSource {
     channels: u16,
     current_samples: Vec<i16>,
     sample_index: usize,
+    total_samples: Option<u64>,
 }
 
-impl SymphoniaFlacSource {
+impl SymphoniaSource {
     fn new(path: &str, seek_secs: u64) -> Option<Self> {
         let file = std::fs::File::open(path).ok()?;
         let mss = MediaSourceStream::new(Box::new(file), Default::default());
         
+        let path_buf = std::path::Path::new(path);
+        let ext = path_buf.extension()?.to_str()?.to_lowercase();
+        
         let mut hint = Hint::new();
-        hint.with_extension("flac");
+        hint.with_extension(&ext);
         
         let format_opts = FormatOptions::default();
         let metadata_opts = MetadataOptions::default();
@@ -218,6 +222,7 @@ impl SymphoniaFlacSource {
         let track_id = track.id;
         let sample_rate = track.codec_params.sample_rate.unwrap_or(44100);
         let channels = track.codec_params.channels.map(|c| c.count() as u16).unwrap_or(2);
+        let total_samples = track.codec_params.n_frames;
         
         let mut decoder = symphonia::default::get_codecs()
             .make(&track.codec_params, &decoder_opts)
@@ -241,6 +246,7 @@ impl SymphoniaFlacSource {
             channels,
             current_samples: Vec::new(),
             sample_index: 0,
+            total_samples,
         })
     }
     
@@ -273,7 +279,7 @@ impl SymphoniaFlacSource {
     }
 }
 
-impl Iterator for SymphoniaFlacSource {
+impl Iterator for SymphoniaSource {
     type Item = i16;
     
     fn next(&mut self) -> Option<Self::Item> {
@@ -289,7 +295,7 @@ impl Iterator for SymphoniaFlacSource {
     }
 }
 
-impl rodio::Source for SymphoniaFlacSource {
+impl rodio::Source for SymphoniaSource {
     fn current_frame_len(&self) -> Option<usize> {
         Some(self.current_samples.len() - self.sample_index)
     }
@@ -303,7 +309,9 @@ impl rodio::Source for SymphoniaFlacSource {
     }
     
     fn total_duration(&self) -> Option<std::time::Duration> {
-        None
+        self.total_samples.map(|n| {
+            std::time::Duration::from_secs(n / self.sample_rate as u64)
+        })
     }
 }
 
@@ -350,20 +358,16 @@ impl AudioPlayer {
             }
             
             fn play_file(path: &str, volume: f32, seek_secs: u64, stream_handle: &rodio::OutputStreamHandle, start_paused: bool) -> Option<Sink> {
-                use std::path::Path;
-                
-                let ext = Path::new(path).extension()?.to_str()?.to_lowercase();
                 let sink = Sink::try_new(stream_handle).ok()?;
                 sink.set_volume(volume);
                 // Start paused so no audio plays until caller sets start_time
                 sink.pause();
                 
-                if ext == "flac" {
-                    // FLAC: use custom symphonia source for fast seeking
-                    let source = SymphoniaFlacSource::new(path, seek_secs)?;
+                // Try symphonia first for all formats (better seeking, handles embedded art)
+                if let Some(source) = SymphoniaSource::new(path, seek_secs) {
                     sink.append(source);
                 } else {
-                    // MP3/WAV: use rodio decoder with try_seek
+                    // Fallback to rodio decoder for formats symphonia doesn't support
                     let file = File::open(path).ok()?;
                     let source = Decoder::new(BufReader::new(file)).ok()?;
                     sink.append(source);
@@ -477,96 +481,62 @@ impl AudioPlayer {
                             let state = state_clone.lock().unwrap();
                             let was_paused = state.is_paused;
                             if let Some(ref path) = state.current_path.clone() {
-                                let ext = std::path::Path::new(&path)
-                                    .extension()
-                                    .and_then(|e| e.to_str())
-                                    .map(|e| e.to_lowercase())
-                                    .unwrap_or_default();
-                                
-                                // For non-FLAC, try fast seek on current sink first
-                                let seek_duration = Duration::from_secs(position);
-                                let seek_success = if ext != "flac" {
-                                    if let Some(ref sink) = current_sink {
-                                        sink.try_seek(seek_duration).is_ok()
-                                    } else {
-                                        false
-                                    }
+                                // Always recreate the sink for seeking since SymphoniaSource
+                                // doesn't support rodio's try_seek. The recreate approach
+                                // works reliably for all formats.
+                                let volume = if let Some(ref sink) = current_sink {
+                                    sink.volume()
                                 } else {
-                                    false
+                                    1.0
                                 };
+                                drop(state);
                                 
-                                if seek_success {
-                                    // Fast seek worked, just update the state
-                                    drop(state);
-                                    let mut state = state_clone.lock().unwrap();
-                                    if was_paused {
-                                        let now = Instant::now();
-                                        state.start_time = Some(now);
-                                        state.pause_time = Some(now);
-                                        state.start_position = position;
-                                        state.is_paused = true;
-                                        state.is_finished = false;
-                                    } else {
-                                        state.start_time = Some(Instant::now());
-                                        state.start_position = position;
-                                        state.is_finished = false;
+                                if let Some(sink) = current_sink.take() {
+                                    sink.stop();
+                                }
+                                
+                                // Try with current output, recreate if needed
+                                // Sink starts paused so we can set start_time before audio plays
+                                let mut played = false;
+                                if let Some(ref handle) = audio_output.as_ref().map(|(_, h)| h) {
+                                    if let Some(sink) = play_file(&path, volume, position, handle, true) {
+                                        current_sink = Some(sink);
+                                        played = true;
                                     }
-                                } else {
-                                    // Recreate sink with seek position
-                                    let volume = if let Some(ref sink) = current_sink {
-                                        sink.volume()
-                                    } else {
-                                        1.0
-                                    };
-                                    drop(state);
-                                    
-                                    if let Some(sink) = current_sink.take() {
-                                        sink.stop();
-                                    }
-                                    
-                                    // Try with current output, recreate if needed
-                                    // Sink starts paused so we can set start_time before audio plays
-                                    let mut played = false;
+                                }
+                                
+                                if !played {
+                                    audio_output = create_output_for_device(&selected_device_name);
                                     if let Some(ref handle) = audio_output.as_ref().map(|(_, h)| h) {
                                         if let Some(sink) = play_file(&path, volume, position, handle, true) {
                                             current_sink = Some(sink);
                                             played = true;
                                         }
                                     }
-                                    
-                                    if !played {
-                                        audio_output = create_output_for_device(&selected_device_name);
-                                        if let Some(ref handle) = audio_output.as_ref().map(|(_, h)| h) {
-                                            if let Some(sink) = play_file(&path, volume, position, handle, true) {
-                                                current_sink = Some(sink);
-                                                played = true;
-                                            }
-                                        }
-                                    }
-                                    
-                                    if played {
-                                        if was_paused {
-                                            // Keep paused — sink is already paused from play_file
-                                            let now = Instant::now();
-                                            let mut state = state_clone.lock().unwrap();
-                                            state.start_time = Some(now);
-                                            state.start_position = position;
-                                            state.is_paused = true;
-                                            state.pause_time = Some(now);
-                                            state.is_finished = false;
-                                        } else {
-                                            // Set start_time BEFORE unpausing so elapsed is accurate
-                                            let mut state = state_clone.lock().unwrap();
-                                            state.start_time = Some(Instant::now());
-                                            state.start_position = position;
-                                            state.is_paused = false;
-                                            state.pause_time = None;
-                                            state.is_finished = false;
-                                            drop(state);
-                                            // Now unpause — audio starts exactly when start_time is set
-                                            if let Some(ref sink) = current_sink {
-                                                sink.play();
-                                            }
+                                }
+                                
+                                if played {
+                                    if was_paused {
+                                        // Keep paused — sink is already paused from play_file
+                                        let now = Instant::now();
+                                        let mut state = state_clone.lock().unwrap();
+                                        state.start_time = Some(now);
+                                        state.start_position = position;
+                                        state.is_paused = true;
+                                        state.pause_time = Some(now);
+                                        state.is_finished = false;
+                                    } else {
+                                        // Set start_time BEFORE unpausing so elapsed is accurate
+                                        let mut state = state_clone.lock().unwrap();
+                                        state.start_time = Some(Instant::now());
+                                        state.start_position = position;
+                                        state.is_paused = false;
+                                        state.pause_time = None;
+                                        state.is_finished = false;
+                                        drop(state);
+                                        // Now unpause — audio starts exactly when start_time is set
+                                        if let Some(ref sink) = current_sink {
+                                            sink.play();
                                         }
                                     }
                                 }
@@ -742,9 +712,18 @@ fn get_audio_duration(path: &str) -> Option<u64> {
     
     match ext.as_str() {
         "mp3" => {
-            mp3_duration::from_path(path).ok().map(|d| d.as_secs())
+            // Try mp3_duration first, fall back to symphonia if it fails
+            // (mp3_duration fails on some MP3s with embedded cover art)
+            if let Some(d) = mp3_duration::from_path(path).ok().map(|d| d.as_secs()) {
+                return Some(d);
+            }
+            symphonia_duration(path)
         }
         _ => {
+            // Try symphonia first (more reliable), fall back to rodio decoder
+            if let Some(d) = symphonia_duration(path) {
+                return Some(d);
+            }
             use rodio::{Decoder, Source};
             use std::fs::File;
             use std::io::BufReader;
@@ -754,6 +733,35 @@ fn get_audio_duration(path: &str) -> Option<u64> {
             source.total_duration().map(|d| d.as_secs())
         }
     }
+}
+
+fn symphonia_duration(path: &str) -> Option<u64> {
+    let file = std::fs::File::open(path).ok()?;
+    let mss = MediaSourceStream::new(Box::new(file), Default::default());
+    
+    let path_buf = std::path::Path::new(path);
+    let ext = path_buf.extension()?.to_str()?.to_lowercase();
+    
+    let mut hint = Hint::new();
+    hint.with_extension(&ext);
+    
+    let format_opts = FormatOptions::default();
+    let metadata_opts = MetadataOptions::default();
+    
+    let probed = symphonia::default::get_probe()
+        .format(&hint, mss, &format_opts, &metadata_opts)
+        .ok()?;
+    
+    let format = probed.format;
+    
+    let track = format.tracks()
+        .iter()
+        .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)?;
+    
+    let sample_rate = track.codec_params.sample_rate? as u64;
+    let n_frames = track.codec_params.n_frames?;
+    
+    Some(n_frames / sample_rate)
 }
 
 #[derive(Serialize, Deserialize)]
