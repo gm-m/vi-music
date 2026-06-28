@@ -26,6 +26,14 @@ A minimal, VIM-style music player built with Tauri and vanilla JavaScript.
 | `G` | Go to last track |
 | `5G` | Go to line 5 |
 | `Ctrl+d` / `Ctrl+u` | Page down/up |
+| `Ctrl+f` / `Ctrl+b` | Full page down/up |
+| `0` | Seek to start of track |
+| `$` | Seek to end of track |
+| `%` | Go to playing track |
+| `zz` | Center selection in view |
+| `zt` / `zb` | Scroll selection to top/bottom |
+| `Ctrl+o` | Navigate back in history |
+| `Backspace` | Go back / folder up |
 
 ### Playback
 | Key | Action |
@@ -77,10 +85,16 @@ A minimal, VIM-style music player built with Tauri and vanilla JavaScript.
 | `m` + `a-z` | Set bookmark at current position |
 | `'` + `a-z` | Jump to bookmark |
 
-### Track Deletion
+### Track Editing
 | Key | Action |
 |-----|--------|
 | `dd` | Delete selected track(s) from playlist |
+| `x` | Delete track at cursor |
+| `D` (Shift+d) | Delete to end of playlist |
+| `u` | Undo last deletion |
+| `y` | Yank (copy track path to clipboard) |
+| `>` / `<` | Move track down/up (reorder) |
+| `.` | Repeat last action |
 
 ### Queue
 | Key | Action |
@@ -108,6 +122,14 @@ A minimal, VIM-style music player built with Tauri and vanilla JavaScript.
 | `N` | Jump to previous match |
 | `Enter` | Confirm filter |
 | `Esc` | Clear filter and exit |
+
+### Info & Search
+| Key | Action |
+|-----|--------|
+| `i` | Show selected track info |
+| `Ctrl+g` | Show now playing info |
+| `*` | Find next track by same artist |
+| `#` | Find previous track by same artist |
 
 ### General
 | Key | Action |
@@ -144,7 +166,9 @@ Browse your library by artist. Use `:artists` to enter this view.
 |-----|--------|
 | `v` | Enter visual mode (multi-select) |
 | `j` / `k` | Extend selection up/down |
+| `3j` / `5k` | Extend selection N lines (count prefix) |
 | `gg` / `G` | Extend to top/bottom |
+| `Ctrl+d` / `Ctrl+u` | Page down/up selection |
 | `a` | Add selection to queue |
 | `d` | Delete selected tracks from playlist |
 | `p` | Add selection to playlist |
@@ -154,6 +178,7 @@ Browse your library by artist. Use `:artists` to enter this view.
 | Key | Action |
 |-----|--------|
 | `p` | Add current track to playlist |
+| `P` | Open playlist manager |
 
 ## Command Mode
 

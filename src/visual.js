@@ -88,6 +88,15 @@ export function handleVisualModeKeyDown(e) {
     const render = isFolderView ? renderFolderView : renderPlaylist;
     const scroll = isFolderView ? scrollToFolderSelected : scrollToSelected;
     
+    // Handle count prefix
+    if (/^[0-9]$/.test(e.key) && state.pendingKey === null) {
+        if (state.countPrefix !== '' || e.key !== '0') {
+            state.countPrefix += e.key;
+            return;
+        }
+    }
+    const count = parseInt(state.countPrefix) || 1;
+    
     // Handle multi-key commands in visual mode
     if (state.pendingKey === 'g') {
         if (e.key === 'g') {
@@ -100,57 +109,85 @@ export function handleVisualModeKeyDown(e) {
             scroll();
         }
         state.pendingKey = null;
+        state.countPrefix = '';
         return;
     }
     
     switch (e.key) {
         case 'j':
-            if (currentIndex < items.length - 1) {
+            for (let i = 0; i < count; i++) {
                 if (isFolderView) {
-                    state.folderSelectedIndex++;
+                    if (state.folderSelectedIndex < items.length - 1) state.folderSelectedIndex++;
                 } else {
-                    state.selectedIndex++;
+                    if (state.selectedIndex < items.length - 1) state.selectedIndex++;
                 }
-                render();
-                scroll();
-            }
-            break;
-        case 'k':
-            if (currentIndex > 0) {
-                if (isFolderView) {
-                    state.folderSelectedIndex--;
-                } else {
-                    state.selectedIndex--;
-                }
-                render();
-                scroll();
-            }
-            break;
-        case 'g':
-            state.pendingKey = 'g';
-            break;
-        case 'G':
-            if (isFolderView) {
-                state.folderSelectedIndex = items.length - 1;
-            } else {
-                state.selectedIndex = items.length - 1;
             }
             render();
             scroll();
+            state.countPrefix = '';
+            break;
+        case 'k':
+            for (let i = 0; i < count; i++) {
+                if (isFolderView) {
+                    if (state.folderSelectedIndex > 0) state.folderSelectedIndex--;
+                } else {
+                    if (state.selectedIndex > 0) state.selectedIndex--;
+                }
+            }
+            render();
+            scroll();
+            state.countPrefix = '';
+            break;
+        case 'g':
+            state.pendingKey = 'g';
+            state.countPrefix = '';
+            return;
+        case 'G':
+            if (state.countPrefix) {
+                const targetIdx = Math.min(count - 1, items.length - 1);
+                if (isFolderView) state.folderSelectedIndex = targetIdx;
+                else state.selectedIndex = targetIdx;
+            } else {
+                if (isFolderView) state.folderSelectedIndex = items.length - 1;
+                else state.selectedIndex = items.length - 1;
+            }
+            render();
+            scroll();
+            state.countPrefix = '';
             break;
         case 'a':
             addVisualSelectionToQueue();
+            state.countPrefix = '';
             break;
         case 'd':
             deleteSelectedTracks();
+            state.countPrefix = '';
             break;
         case 'p':
             showAddToPlaylistPicker(getSelectedTrackPaths(getVisualSelection()));
+            state.countPrefix = '';
             break;
         case 'v':
         case 'Escape':
             exitVisualMode();
+            state.countPrefix = '';
             break;
+        default:
+            state.countPrefix = '';
+            break;
+    }
+    
+    // Handle Ctrl+d / Ctrl+u in visual mode
+    if (e.ctrlKey && (e.key === 'd' || e.key === 'u')) {
+        e.preventDefault();
+        const delta = (e.key === 'd' ? 1 : -1) * 10 * count;
+        if (isFolderView) {
+            state.folderSelectedIndex = Math.max(0, Math.min(items.length - 1, state.folderSelectedIndex + delta));
+        } else {
+            state.selectedIndex = Math.max(0, Math.min(items.length - 1, state.selectedIndex + delta));
+        }
+        render();
+        scroll();
     }
 }
 
@@ -170,6 +207,12 @@ export function deleteSelectedTracks() {
     
     // Sort in descending order to delete from end first
     indicesToDelete.sort((a, b) => b - a);
+    
+    // Save deleted tracks for undo
+    const deletedTracks = indicesToDelete.map(idx => ({
+        track: state.playlist[idx],
+        index: idx,
+    }));
     
     // Check if we're deleting the currently playing track
     let newPlayingIndex = state.playingIndex;
@@ -192,8 +235,98 @@ export function deleteSelectedTracks() {
         state.selectedIndex = Math.max(0, state.playlist.length - 1);
     }
     
+    // Push to undo stack
+    state.deletedTracks.push({
+        tracks: deletedTracks,
+        playingIndex: state.playingIndex,
+    });
+    
     renderPlaylist();
     updateStatus(`Deleted ${indicesToDelete.length} track${indicesToDelete.length > 1 ? 's' : ''}`);
+}
+
+// x - delete single track at cursor
+export function deleteTrack() {
+    if (state.playlist.length === 0) return;
+    deleteSelectedTracks();
+}
+
+// D - delete from current track to end of playlist
+export function deleteToEnd() {
+    if (state.playlist.length === 0) return;
+    if (state.viewMode !== 'list') return;
+    
+    const startIdx = state.selectedIndex;
+    const endIdx = state.playlist.length - 1;
+    
+    if (startIdx > endIdx) return;
+    
+    // Save deleted tracks for undo
+    const deletedTracks = [];
+    for (let i = startIdx; i <= endIdx; i++) {
+        deletedTracks.push({ track: state.playlist[i], index: i });
+    }
+    
+    const count = endIdx - startIdx + 1;
+    let newPlayingIndex = state.playingIndex;
+    
+    if (state.playingIndex >= startIdx) {
+        newPlayingIndex = -1;
+    }
+    
+    state.playlist.splice(startIdx, count);
+    state.playingIndex = newPlayingIndex;
+    state.selectedIndex = Math.max(0, state.playlist.length - 1);
+    
+    state.deletedTracks.push({
+        tracks: deletedTracks,
+        playingIndex: state.playingIndex,
+    });
+    
+    renderPlaylist();
+    updateStatus(`Deleted ${count} track${count > 1 ? 's' : ''} to end`);
+}
+
+// u - undo last deletion
+export function undoDelete() {
+    if (state.deletedTracks.length === 0) {
+        updateStatus('Nothing to undo');
+        return;
+    }
+    
+    const lastDelete = state.deletedTracks.pop();
+    // Sort by index ascending to reinsert
+    lastDelete.tracks.sort((a, b) => a.index - b.index);
+    
+    for (const { track, index } of lastDelete.tracks) {
+        state.playlist.splice(index, 0, track);
+    }
+    
+    // Restore playing index if it was -1 (deleted track was playing)
+    // Otherwise adjust if tracks were inserted before it
+    if (state.playingIndex === -1) {
+        state.playingIndex = lastDelete.playingIndex;
+        // Adjust if the restored playing index needs updating
+        for (const { index } of lastDelete.tracks) {
+            if (index <= state.playingIndex) {
+                state.playingIndex++;
+            }
+        }
+    } else {
+        for (const { index } of lastDelete.tracks) {
+            if (index <= state.playingIndex) {
+                state.playingIndex++;
+            }
+        }
+    }
+    
+    // Restore selected index
+    if (lastDelete.tracks.length > 0) {
+        state.selectedIndex = lastDelete.tracks[0].index;
+    }
+    
+    renderPlaylist();
+    updateStatus(`Restored ${lastDelete.tracks.length} track${lastDelete.tracks.length > 1 ? 's' : ''}`);
 }
 
 export function deleteTrackRange(start, end) {

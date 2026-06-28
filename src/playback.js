@@ -220,6 +220,25 @@ export function jumpToPercent(percent) {
     updateStatus(`Jumped to ${percent}%`);
 }
 
+// Seek to start/end of track
+export function seekToStart() {
+    if (!state.isPlaying) {
+        updateStatus('No track playing');
+        return;
+    }
+    seekTo(0);
+    updateStatus('Seeked to start');
+}
+
+export function seekToEnd() {
+    if (!state.isPlaying || !state.duration) {
+        updateStatus('No track playing');
+        return;
+    }
+    seekTo(state.duration - 0.5);
+    updateStatus('Seeked to end');
+}
+
 // Repeat & Shuffle
 export function toggleRepeat() {
     const modes = ['off', 'one', 'all'];

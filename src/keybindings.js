@@ -9,6 +9,14 @@ const defaultKeybindings = {
     'G': 'goToEnd',
     'Ctrl+d': 'pageDown',
     'Ctrl+u': 'pageUp',
+    'Ctrl+f': 'fullPageDown',
+    'Ctrl+b': 'fullPageUp',
+    '0': 'seekStart',
+    '$': 'seekEnd',
+    '%': 'goToPlayingTrack',
+    'z': 'pendingZ',
+    'Backspace': 'goBack',
+    'Ctrl+o': 'navBack',
     // Playback
     'Enter': 'playSelected',
     'Space': 'togglePause',
@@ -41,17 +49,33 @@ const defaultKeybindings = {
     'S': 'toggleShuffle',
     // Queue
     'a': 'addToQueue',
+    'A': 'addToQueueAndPlay',
     'q': 'toggleQueueView',
     // Folder
     'o': 'openFolder',
     'R': 'reloadContent',
     // Playlist
     'P': 'openPlaylistManager',
-    'A': 'addToPlaylist',
+    'p': 'addToPlaylist',
     // Help
     '?': 'toggleHelp',
     // Delete
     'd': 'pendingD',
+    'x': 'deleteTrack',
+    'D': 'deleteToEnd',
+    'u': 'undoDelete',
+    // Yank
+    'y': 'yankPath',
+    // Reorder
+    '>': 'moveTrackDown',
+    '<': 'moveTrackUp',
+    // Repeat last
+    '.': 'repeatLast',
+    // Info
+    'i': 'showTrackInfo',
+    'Ctrl+g': 'showNowPlayingInfo',
+    '*': 'findNextArtist',
+    '#': 'findPrevArtist',
     // Bookmarks
     'm': 'pendingM',
     "'": 'pendingQuote',

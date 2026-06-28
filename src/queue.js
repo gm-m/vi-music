@@ -111,12 +111,22 @@ export function renderQueueView() {
 }
 
 export function handleQueueViewKeyDown(e) {
+    // Handle count prefix
+    if (/^[0-9]$/.test(e.key) && state.pendingKey === null) {
+        if (state.countPrefix !== '' || e.key !== '0') {
+            state.countPrefix += e.key;
+            return;
+        }
+    }
+    const count = parseInt(state.countPrefix) || 1;
+    
     // Handle multi-key commands in queue view
     if (state.pendingKey === 'd') {
         if (e.key === 'd') {
             removeFromQueue(state.queueSelectedIndex);
         }
         state.pendingKey = null;
+        state.countPrefix = '';
         return;
     }
     
@@ -126,21 +136,28 @@ export function handleQueueViewKeyDown(e) {
             renderQueueView();
         }
         state.pendingKey = null;
+        state.countPrefix = '';
         return;
     }
     
     switch (e.key) {
         case 'j':
-            if (state.queueSelectedIndex < state.queue.length - 1) {
-                state.queueSelectedIndex++;
-                renderQueueView();
+            for (let i = 0; i < count; i++) {
+                if (state.queueSelectedIndex < state.queue.length - 1) {
+                    state.queueSelectedIndex++;
+                }
             }
+            renderQueueView();
+            state.countPrefix = '';
             break;
         case 'k':
-            if (state.queueSelectedIndex > 0) {
-                state.queueSelectedIndex--;
-                renderQueueView();
+            for (let i = 0; i < count; i++) {
+                if (state.queueSelectedIndex > 0) {
+                    state.queueSelectedIndex--;
+                }
             }
+            renderQueueView();
+            state.countPrefix = '';
             break;
         case 'J':
             // Move selected item down
@@ -166,16 +183,24 @@ export function handleQueueViewKeyDown(e) {
             break;
         case 'g':
             state.pendingKey = 'g';
+            state.countPrefix = '';
             break;
         case 'G':
-            state.queueSelectedIndex = Math.max(0, state.queue.length - 1);
+            if (state.countPrefix) {
+                state.queueSelectedIndex = Math.min(count - 1, state.queue.length - 1);
+            } else {
+                state.queueSelectedIndex = Math.max(0, state.queue.length - 1);
+            }
             renderQueueView();
+            state.countPrefix = '';
             break;
         case 'd':
             state.pendingKey = 'd';
+            state.countPrefix = '';
             break;
         case 'c':
             clearQueue();
+            state.countPrefix = '';
             break;
         case 'Enter':
             // Play selected queue item immediately
@@ -188,10 +213,15 @@ export function handleQueueViewKeyDown(e) {
                 }
                 updateQueueDisplay();
             }
+            state.countPrefix = '';
             break;
         case 'q':
         case 'Escape':
             closeQueueView();
+            state.countPrefix = '';
+            break;
+        default:
+            state.countPrefix = '';
             break;
     }
 }

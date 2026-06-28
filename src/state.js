@@ -57,6 +57,12 @@ export const state = {
     loopA: null, // Start position in seconds
     loopB: null, // End position in seconds
     loopInterval: null,
+    // Undo for track deletion
+    deletedTracks: [], // Stack of { tracks: [...], startIndex, playingIndex }
+    // Last action for . repeat
+    lastAction: null, // { action, count }
+    // Navigation history for Ctrl+o
+    navHistory: [], // Stack of { viewMode, selectedIndex, rootFolder, currentFolder }
     // Settings
     settings: {
         relativenumber: false, // Show relative line numbers

@@ -1,14 +1,14 @@
 import { invoke } from '../tauri.js';
 import { state, elements } from '../state.js';
 import { escapeHtml, formatDuration } from '../utils.js';
-import { updateStatus, toggleHelp } from '../ui.js';
-import { playTrack, togglePause, stop, nextTrack, prevTrack, adjustVolume, toggleMute, seekRelative } from '../playback.js';
+import { updateStatus } from '../ui.js';
+import { playTrack } from '../playback.js';
 import { scrollToSelected } from '../navigation.js';
 import { renderPlaylist } from './playlist.js';
 import { updateViewModeIndicator } from './folder.js';
 import { getKeyString, getKeyAction } from '../keybindings.js';
+import { executeAction } from '../keyboard.js';
 import { clearFilter, enterFilterMode, jumpToNextMatch, jumpToPrevMatch } from '../filter.js';
-import { enterCommandMode } from '../commands.js';
 
 export async function openArtistView() {
     if (state.playlist.length === 0) {
@@ -288,7 +288,7 @@ export function handleArtistViewKeyDown(e) {
                     return;
                 }
             }
-            // Pass through to normal key handling for playback controls etc.
+            // Pass through to centralized action handler for playback controls etc.
             const keyString = getKeyString(e);
             const action = getKeyAction(keyString) || getKeyAction(e.key);
             if (action) {
@@ -296,20 +296,11 @@ export function handleArtistViewKeyDown(e) {
                 switch (action) {
                     case 'pageDown': e?.preventDefault(); moveArtistSelection(10 * count); state.countPrefix = ''; break;
                     case 'pageUp': e?.preventDefault(); moveArtistSelection(-10 * count); state.countPrefix = ''; break;
-                    case 'togglePause': e?.preventDefault(); togglePause(); break;
-                    case 'stop': stop(); break;
-                    case 'nextTrack': nextTrack(); break;
-                    case 'prevTrack': prevTrack(); break;
-                    case 'volumeUp': adjustVolume(state.settings.volumestep); break;
-                    case 'volumeDown': adjustVolume(-state.settings.volumestep); break;
-                    case 'toggleMute': toggleMute(); break;
-                    case 'seekForward': seekRelative(state.settings.seektime); break;
-                    case 'seekBackward': seekRelative(-state.settings.seektime); break;
-                    case 'seekForwardLarge': seekRelative(state.settings.seektimelarge); break;
-                    case 'seekBackwardLarge': seekRelative(-state.settings.seektimelarge); break;
-                    case 'commandMode': e?.preventDefault(); enterCommandMode(); break;
-                    case 'filterMode': e?.preventDefault(); enterFilterMode(); break;
-                    case 'toggleHelp': toggleHelp(); break;
+                    case 'fullPageDown': e?.preventDefault(); moveArtistSelection(20 * count); state.countPrefix = ''; break;
+                    case 'fullPageUp': e?.preventDefault(); moveArtistSelection(-20 * count); state.countPrefix = ''; break;
+                    default:
+                        executeAction(action, e);
+                        break;
                 }
             }
             break;
