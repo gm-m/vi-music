@@ -1,10 +1,10 @@
 import { state, elements } from './state.js';
 import { updateStatus, updateModeIndicators, toggleHelp } from './ui.js';
 import { playTrack, playSelected, togglePause, stop, nextTrack, prevTrack, setVolume, seekTo, jumpToPercent } from './playback.js';
-import { openFolder, loadFolder, reloadContent } from './views/folder.js';
-import { openArtistView } from './views/artist.js';
+import { openFolder, loadFolder, reloadContent, renderFolderView } from './views/folder.js';
+import { openArtistView, renderArtistView } from './views/artist.js';
 import { renderPlaylist } from './views/playlist.js';
-import { moveSelectionRelative } from './navigation.js';
+import { moveSelectionRelative, selectTrack } from './navigation.js';
 import { handleSetCommand, showCurrentSettings } from './settings.js';
 import { setSleepTimer, adjustSleepTimer, setBookmark, showBookmarks, deleteBookmark } from './features.js';
 import { getLibraryFolders, addLibraryFolder, removeLibraryFolder, scanLibrary, showLibraryFolders } from './library.js';
@@ -145,6 +145,41 @@ export function executeCommand(cmd) {
             deleteTrackRange(line, line);
             return;
         }
+    }
+    
+    // Check for line number jump like :42
+    const lineNumberMatch = trimmed.match(/^(\d+)$/);
+    if (lineNumberMatch) {
+        const line = parseInt(lineNumberMatch[1]);
+        if (line < 1) {
+            updateStatus('Invalid line number');
+            return;
+        }
+        const targetIndex = line - 1;
+        if (state.viewMode === 'folder') {
+            if (state.folderContents.length === 0) {
+                updateStatus('No items to jump to');
+                return;
+            }
+            state.folderSelectedIndex = Math.min(targetIndex, state.folderContents.length - 1);
+            renderFolderView();
+        } else if (state.viewMode === 'artist') {
+            const itemCount = state.artistViewMode === 'list' ? state.artistList.length : state.artistTracks.length;
+            if (itemCount === 0) {
+                updateStatus('No items to jump to');
+                return;
+            }
+            state.artistSelectedIndex = Math.min(targetIndex, itemCount - 1);
+            renderArtistView();
+        } else {
+            if (state.playlist.length === 0) {
+                updateStatus('No tracks to jump to');
+                return;
+            }
+            selectTrack(Math.min(targetIndex, state.playlist.length - 1));
+        }
+        updateStatus(`Line ${line}`);
+        return;
     }
     
     const parts = trimmed.toLowerCase().split(/\s+/);
