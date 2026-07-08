@@ -5,7 +5,7 @@ import { moveSelection, goToTop, goToBottom, selectTrack, scrollToSelected, goTo
 import { playSelected, togglePause, stop, nextTrack, prevTrack, adjustVolume, toggleMute, changeSpeed, resetSpeed, seekRelative, toggleRepeat, toggleShuffle, seekToStart, seekToEnd } from './playback.js';
 import { enterCommandMode, goBack, revealInExplorer } from './commands.js';
 import { enterFilterMode, clearFilter, jumpToNextMatch, jumpToPrevMatch } from './filter.js';
-import { enterVisualMode, handleVisualModeKeyDown, deleteSelectedTracks, deleteTrack, deleteToEnd, undoDelete } from './visual.js';
+import { enterVisualMode, handleVisualModeKeyDown, deleteSelectedTracks, deleteTrack, deleteToEnd, undoDelete, restoreLastVisualSelection } from './visual.js';
 import { handleQueueViewKeyDown, addToQueue, addToQueueAndPlay, toggleQueueView } from './queue.js';
 import { handlePlaylistManagerKeyDown, handleAddToPlaylistKeyDown, showPlaylistManager, showAddToPlaylistPicker, getSelectedTrackPaths } from './playlists.js';
 import { handleArtistViewKeyDown } from './views/artist.js';
@@ -218,6 +218,8 @@ export function handleKeyDown(e) {
             }
         } else if (e.key === 'f') {
             revealInExplorer();
+        } else if (e.key === 'v') {
+            restoreLastVisualSelection();
         }
         state.pendingKey = null;
         state.countPrefix = '';

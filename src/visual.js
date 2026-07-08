@@ -23,6 +23,14 @@ export function enterVisualMode() {
 }
 
 export function exitVisualMode() {
+    if (state.mode === 'visual' && state.visualStart !== -1) {
+        state.lastVisualSelection = {
+            viewMode: state.viewMode,
+            visualStart: state.visualStart,
+            selectedIndex: state.selectedIndex,
+            folderSelectedIndex: state.folderSelectedIndex,
+        };
+    }
     state.mode = 'normal';
     state.visualStart = -1;
     updateModeIndicators();
@@ -43,6 +51,110 @@ export function getVisualSelection() {
         indices.push(i);
     }
     return indices;
+}
+
+export function restoreLastVisualSelection() {
+    const last = state.lastVisualSelection;
+    if (!last) {
+        updateStatus('No previous visual selection');
+        return;
+    }
+    if (last.viewMode !== state.viewMode) {
+        updateStatus('Cannot restore visual selection: view mode changed');
+        return;
+    }
+    const isFolderView = state.viewMode === 'folder';
+    const items = isFolderView ? state.folderContents : state.playlist;
+    if (items.length === 0) {
+        updateStatus('No items to select');
+        return;
+    }
+    const maxIndex = items.length - 1;
+    const start = Math.max(0, Math.min(maxIndex, last.visualStart));
+    const end = Math.max(0, Math.min(maxIndex, isFolderView ? last.folderSelectedIndex : last.selectedIndex));
+    state.visualStart = start;
+    if (isFolderView) {
+        state.folderSelectedIndex = end;
+    } else {
+        state.selectedIndex = end;
+    }
+    state.mode = 'visual';
+    updateModeIndicators();
+    if (isFolderView) {
+        renderFolderView();
+    } else {
+        renderPlaylist();
+    }
+    updateStatus('Restored visual selection');
+}
+
+function swapVisualSelection() {
+    const isFolderView = state.viewMode === 'folder';
+    if (isFolderView) {
+        const tmp = state.visualStart;
+        state.visualStart = state.folderSelectedIndex;
+        state.folderSelectedIndex = tmp;
+    } else {
+        const tmp = state.visualStart;
+        state.visualStart = state.selectedIndex;
+        state.selectedIndex = tmp;
+    }
+    const render = isFolderView ? renderFolderView : renderPlaylist;
+    const scroll = isFolderView ? scrollToFolderSelected : scrollToSelected;
+    render();
+    scroll();
+}
+
+function moveVisualSelectionDown() {
+    if (state.viewMode !== 'list') {
+        updateStatus('Cannot reorder in this view');
+        return;
+    }
+    if (state.playlist.length === 0) return;
+    const start = Math.min(state.visualStart, state.selectedIndex);
+    const end = Math.max(state.visualStart, state.selectedIndex);
+    if (end >= state.playlist.length - 1) return;
+
+    const [moved] = state.playlist.splice(end + 1, 1);
+    state.playlist.splice(start, 0, moved);
+
+    if (state.playingIndex === end + 1) {
+        state.playingIndex = start;
+    } else if (state.playingIndex >= start && state.playingIndex <= end) {
+        state.playingIndex += 1;
+    }
+
+    state.visualStart += 1;
+    state.selectedIndex += 1;
+
+    renderPlaylist();
+    updateStatus('Moved selection down');
+}
+
+function moveVisualSelectionUp() {
+    if (state.viewMode !== 'list') {
+        updateStatus('Cannot reorder in this view');
+        return;
+    }
+    if (state.playlist.length === 0) return;
+    const start = Math.min(state.visualStart, state.selectedIndex);
+    const end = Math.max(state.visualStart, state.selectedIndex);
+    if (start <= 0) return;
+
+    const [moved] = state.playlist.splice(start - 1, 1);
+    state.playlist.splice(end, 0, moved);
+
+    if (state.playingIndex === start - 1) {
+        state.playingIndex = end;
+    } else if (state.playingIndex >= start && state.playingIndex <= end) {
+        state.playingIndex -= 1;
+    }
+
+    state.visualStart -= 1;
+    state.selectedIndex -= 1;
+
+    renderPlaylist();
+    updateStatus('Moved selection up');
 }
 
 export function addVisualSelectionToQueue() {
@@ -165,6 +277,18 @@ export function handleVisualModeKeyDown(e) {
             break;
         case 'p':
             showAddToPlaylistPicker(getSelectedTrackPaths(getVisualSelection()));
+            state.countPrefix = '';
+            break;
+        case 'o':
+            swapVisualSelection();
+            state.countPrefix = '';
+            break;
+        case '>':
+            moveVisualSelectionDown();
+            state.countPrefix = '';
+            break;
+        case '<':
+            moveVisualSelectionUp();
             state.countPrefix = '';
             break;
         case 'v':
