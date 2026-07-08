@@ -169,10 +169,13 @@ Browse your library by artist. Use `:artists` to enter this view.
 | `3j` / `5k` | Extend selection N lines (count prefix) |
 | `gg` / `G` | Extend to top/bottom |
 | `Ctrl+d` / `Ctrl+u` | Page down/up selection |
+| `o` | Swap selection end (anchor ↔ cursor) |
+| `>` / `<` | Move selection down/up (reorder) |
 | `a` | Add selection to queue |
 | `d` | Delete selected tracks from playlist |
 | `p` | Add selection to playlist |
 | `v` / `Esc` | Exit visual mode |
+| `g` `v` (from normal) | Reselect last visual selection |
 
 ### Playlists
 | Key | Action |
@@ -187,6 +190,7 @@ Press `:` to enter command mode. Available commands:
 Press `Tab` in command mode to autocomplete command names.
 
 - `:open` or `:o` - Open folder dialog
+- `:<n>` (e.g., `:42`) - Jump to line n
 - `:play [n]` or `:p [n]` - Play track number n
 - `:stop` - Stop playback
 - `:next` or `:n` - Next track
