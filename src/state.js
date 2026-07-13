@@ -88,6 +88,7 @@ export const elements = {
     prevBtn: document.getElementById('prevBtn'),
     nextBtn: document.getElementById('nextBtn'),
     stopBtn: document.getElementById('stopBtn'),
+    volumeBar: document.querySelector('.volume-bar'),
     volumeFill: document.getElementById('volumeFill'),
     volumeValue: document.getElementById('volumeValue'),
     playlist: document.getElementById('playlist'),

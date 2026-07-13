@@ -6,7 +6,7 @@ import { state, elements } from './state.js';
 import { updateVolumeDisplay, setupHelpTabs } from './ui.js';
 import { loadKeybindings } from './keybindings.js';
 import { loadSettings } from './settings.js';
-import { refreshStatus, startProgressUpdater, setupMediaControlListener, togglePause, prevTrack, nextTrack, stop, seekTo } from './playback.js';
+import { refreshStatus, startProgressUpdater, setupMediaControlListener, togglePause, prevTrack, nextTrack, stop, seekTo, setVolume } from './playback.js';
 import { handleKeyDown } from './keyboard.js';
 import { handleCommandInput, exitCommandMode } from './commands.js';
 import { handleFilterInput, handleFilterKeydown, exitFilterMode } from './filter.js';
@@ -53,6 +53,9 @@ function setupEventListeners() {
     elements.filterInput.addEventListener('blur', exitFilterMode);
     
     elements.progressBar.addEventListener('click', handleProgressBarClick);
+    
+    elements.volumeBar.addEventListener('click', handleVolumeBarClick);
+    elements.volumeBar.addEventListener('mousedown', handleVolumeBarDragStart);
 }
 
 function handleProgressBarClick(e) {
@@ -63,6 +66,29 @@ function handleProgressBarClick(e) {
     const position = Math.floor(percent * state.duration);
     seekTo(position);
 }
+
+function handleVolumeBarClick(e) {
+    const rect = elements.volumeBar.getBoundingClientRect();
+    const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    setVolume(percent);
+}
+
+let isDraggingVolume = false;
+
+function handleVolumeBarDragStart(e) {
+    isDraggingVolume = true;
+    handleVolumeBarClick(e);
+    e.preventDefault();
+}
+
+document.addEventListener('mousemove', (e) => {
+    if (!isDraggingVolume) return;
+    handleVolumeBarClick(e);
+});
+
+document.addEventListener('mouseup', () => {
+    isDraggingVolume = false;
+});
 
 // Start the app
 init();

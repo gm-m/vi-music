@@ -299,6 +299,7 @@ body {
     background: var(--bg-tertiary);
     border-radius: 2px;
     overflow: hidden;
+    cursor: pointer;
 }
 
 .volume-fill {
