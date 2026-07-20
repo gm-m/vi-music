@@ -149,7 +149,6 @@ struct PlaybackState {
     is_paused: bool,
     pause_time: Option<Instant>,
     current_path: Option<String>,
-    duration: Option<u64>,
     is_finished: bool,
     speed: f32,
 }
@@ -162,7 +161,6 @@ impl PlaybackState {
             is_paused: false,
             pause_time: None,
             current_path: None,
-            duration: None,
             is_finished: false,
             speed: 1.0,
         }
