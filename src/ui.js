@@ -51,7 +51,12 @@ export function updateModeIndicators() {
 
 export function updateProgressDisplay() {
     elements.timeElapsed.textContent = formatDuration(state.elapsed);
-    elements.timeTotal.textContent = formatDuration(state.duration);
+    if (state.settings.remainingtime && state.duration && state.duration > 0) {
+        const remaining = Math.max(0, state.duration - state.elapsed);
+        elements.timeTotal.textContent = `-${formatDuration(remaining)}`;
+    } else {
+        elements.timeTotal.textContent = formatDuration(state.duration);
+    }
     
     if (state.duration && state.duration > 0) {
         const percent = (state.elapsed / state.duration) * 100;
@@ -64,7 +69,11 @@ export function updateProgressDisplay() {
 export function resetProgressDisplay() {
     state.elapsed = 0;
     elements.timeElapsed.textContent = '0:00';
-    elements.timeTotal.textContent = formatDuration(state.duration);
+    if (state.settings.remainingtime && state.duration && state.duration > 0) {
+        elements.timeTotal.textContent = `-${formatDuration(state.duration)}`;
+    } else {
+        elements.timeTotal.textContent = formatDuration(state.duration);
+    }
     elements.progressFill.style.width = '0%';
 }
 

@@ -1,6 +1,6 @@
 import { invoke } from './tauri.js';
 import { state } from './state.js';
-import { updateStatus } from './ui.js';
+import { updateStatus, updateProgressDisplay } from './ui.js';
 import { renderCurrentView } from './filter.js';
 
 export async function loadSettings() {
@@ -35,6 +35,7 @@ export function handleSetCommand(arg) {
         'ss': 'speedstep',
         'vs': 'volumestep',
         'cp': 'carryposition',
+        'rt': 'remainingtime',
     };
     
     // Handle "no" prefix to disable (e.g., "norelativenumber")
@@ -45,6 +46,7 @@ export function handleSetCommand(arg) {
             state.settings[resolved] = false;
             saveSettings();
             renderCurrentView();
+            updateProgressDisplay();
             updateStatus(`${resolved} disabled`);
             return;
         }
@@ -58,6 +60,7 @@ export function handleSetCommand(arg) {
             state.settings[resolved] = !state.settings[resolved];
             saveSettings();
             renderCurrentView();
+            updateProgressDisplay();
             updateStatus(`${resolved} ${state.settings[resolved] ? 'enabled' : 'disabled'}`);
             return;
         }
@@ -106,6 +109,7 @@ export function handleSetCommand(arg) {
             state.settings[resolvedName] = true;
             saveSettings();
             renderCurrentView();
+            updateProgressDisplay();
             updateStatus(`${resolvedName} enabled`);
         } else {
             updateStatus(`${resolvedName}=${state.settings[resolvedName]} (use :set ${resolvedName}=<value> to change)`);

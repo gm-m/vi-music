@@ -246,10 +246,17 @@ Press `Tab` in command mode to autocomplete command names.
 | `speedstep` | `ss` | `0.25` | Speed change step (`]`/`[`) |
 | `volumestep` | `vs` | `0.05` | Volume change step (`+`/`-`) |
 | `carryposition` | `cp` | `false` | Keep the current playback timestamp when manually changing tracks |
+| `remainingtime` | `rt` | `false` | Show remaining time (countdown) instead of total duration |
 
 Numeric settings are changed with `:set <setting>=<value>`, e.g., `:set seektime=10`.
 
-Settings are persisted in `~/.config/vi-music/settings.json`.
+Settings are persisted in the following locations depending on OS:
+
+| OS | Path |
+|----|------|
+| Windows | `%APPDATA%\vi-music\settings.json` |
+| macOS | `~/Library/Application Support/vi-music/settings.json` |
+| Linux | `~/.config/vi-music/settings.json` |
 
 ## Prerequisites
 
