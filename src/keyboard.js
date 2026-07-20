@@ -296,6 +296,9 @@ export function handleKeyDown(e) {
     if (simpleAction && executeAction(simpleAction, e)) {
         return;
     }
+    
+    // No action matched — clear any stale count prefix
+    state.countPrefix = '';
 }
 
 // Yank (copy track path to clipboard)

@@ -179,7 +179,7 @@ function renderArtistTrackList() {
         backBtn.style.cursor = 'pointer';
         backBtn.addEventListener('click', () => {
             state.artistViewMode = 'list';
-            state.artistSelectedIndex = state.artistList.findIndex(a => a.name === state.currentArtist) || 0;
+            state.artistSelectedIndex = Math.max(0, state.artistList.findIndex(a => a.name === state.currentArtist));
             updateViewModeIndicator();
             renderArtistView();
         });
@@ -228,7 +228,7 @@ export function handleArtistViewKeyDown(e) {
             e.preventDefault();
             if (state.artistViewMode === 'tracks') {
                 state.artistViewMode = 'list';
-                state.artistSelectedIndex = state.artistList.findIndex(a => a.name === state.currentArtist) || 0;
+                state.artistSelectedIndex = Math.max(0, state.artistList.findIndex(a => a.name === state.currentArtist));
                 updateViewModeIndicator();
                 renderArtistView();
             } else {

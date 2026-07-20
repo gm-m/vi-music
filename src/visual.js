@@ -6,6 +6,15 @@ import { scrollToSelected, scrollToFolderSelected } from './navigation.js';
 import { showAddToPlaylistPicker, getSelectedTrackPaths } from './playlists.js';
 import { updateQueueDisplay } from './queue.js';
 
+// Remove queue entries pointing to deleted indices and shift remaining indices
+function cleanupQueueIndices(startIdx, endIdx) {
+    const count = endIdx - startIdx + 1;
+    state.queue = state.queue
+        .filter(idx => idx < startIdx || idx > endIdx)
+        .map(idx => idx > endIdx ? idx - count : idx);
+    updateQueueDisplay();
+}
+
 export function enterVisualMode() {
     if (state.viewMode === 'folder') {
         if (state.folderContents.length === 0) return;
@@ -209,6 +218,21 @@ export function handleVisualModeKeyDown(e) {
     }
     const count = parseInt(state.countPrefix) || 1;
     
+    // Handle Ctrl+d / Ctrl+u in visual mode (before switch to avoid 'd' case catching Ctrl+d)
+    if (e.ctrlKey && (e.key === 'd' || e.key === 'u')) {
+        e.preventDefault();
+        const delta = (e.key === 'd' ? 1 : -1) * 10 * count;
+        if (isFolderView) {
+            state.folderSelectedIndex = Math.max(0, Math.min(items.length - 1, state.folderSelectedIndex + delta));
+        } else {
+            state.selectedIndex = Math.max(0, Math.min(items.length - 1, state.selectedIndex + delta));
+        }
+        render();
+        scroll();
+        state.countPrefix = '';
+        return;
+    }
+    
     // Handle multi-key commands in visual mode
     if (state.pendingKey === 'g') {
         if (e.key === 'g') {
@@ -300,19 +324,6 @@ export function handleVisualModeKeyDown(e) {
             state.countPrefix = '';
             break;
     }
-    
-    // Handle Ctrl+d / Ctrl+u in visual mode
-    if (e.ctrlKey && (e.key === 'd' || e.key === 'u')) {
-        e.preventDefault();
-        const delta = (e.key === 'd' ? 1 : -1) * 10 * count;
-        if (isFolderView) {
-            state.folderSelectedIndex = Math.max(0, Math.min(items.length - 1, state.folderSelectedIndex + delta));
-        } else {
-            state.selectedIndex = Math.max(0, Math.min(items.length - 1, state.selectedIndex + delta));
-        }
-        render();
-        scroll();
-    }
 }
 
 // Track Deletion
@@ -365,6 +376,11 @@ export function deleteSelectedTracks() {
         playingIndex: state.playingIndex,
     });
     
+    // Clean up queue indices
+    const minIdx = Math.min(...indicesToDelete);
+    const maxIdx = Math.max(...indicesToDelete);
+    cleanupQueueIndices(minIdx, maxIdx);
+    
     renderPlaylist();
     updateStatus(`Deleted ${indicesToDelete.length} track${indicesToDelete.length > 1 ? 's' : ''}`);
 }
@@ -406,6 +422,9 @@ export function deleteToEnd() {
         tracks: deletedTracks,
         playingIndex: state.playingIndex,
     });
+    
+    // Clean up queue indices
+    cleanupQueueIndices(startIdx, endIdx);
     
     renderPlaylist();
     updateStatus(`Deleted ${count} track${count > 1 ? 's' : ''} to end`);
@@ -467,6 +486,12 @@ export function deleteTrackRange(start, end) {
     
     const count = endIdx - startIdx + 1;
     
+    // Save deleted tracks for undo
+    const deletedTracks = [];
+    for (let i = startIdx; i <= endIdx; i++) {
+        deletedTracks.push({ track: state.playlist[i], index: i });
+    }
+    
     // Check if we're deleting the currently playing track
     let newPlayingIndex = state.playingIndex;
     if (state.playingIndex >= startIdx && state.playingIndex <= endIdx) {
@@ -482,6 +507,15 @@ export function deleteTrackRange(start, end) {
     if (state.selectedIndex >= state.playlist.length) {
         state.selectedIndex = Math.max(0, state.playlist.length - 1);
     }
+    
+    // Push to undo stack
+    state.deletedTracks.push({
+        tracks: deletedTracks,
+        playingIndex: state.playingIndex,
+    });
+    
+    // Clean up queue indices
+    cleanupQueueIndices(startIdx, endIdx);
     
     renderPlaylist();
     updateStatus(`Deleted ${count} track${count > 1 ? 's' : ''} (lines ${start}-${end})`);
