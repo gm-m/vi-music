@@ -235,7 +235,7 @@ export function seekToEnd() {
         updateStatus('No track playing');
         return;
     }
-    seekTo(state.duration - 0.5);
+    seekTo(Math.floor(state.duration - 0.5));
     updateStatus('Seeked to end');
 }
 
