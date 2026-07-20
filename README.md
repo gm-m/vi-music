@@ -183,6 +183,29 @@ Browse your library by artist. Use `:artists` to enter this view.
 | `p` | Add current track to playlist |
 | `P` | Open playlist manager |
 
+### Custom Keybindings
+
+Keybindings can be customized by creating a `keybindings.json` file in the config directory:
+
+| OS | Path |
+|----|------|
+| Windows | `%APPDATA%\vi-music\keybindings.json` |
+| macOS | `~/Library/Application Support/vi-music/keybindings.json` |
+| Linux | `~/.config/vi-music/keybindings.json` |
+
+The file is a JSON object mapping keys to actions. Only the keys you want to override need to be listed — all other bindings keep their defaults. Example:
+
+```json
+{
+    ">": "moveTrackDown",
+    "<": "moveTrackUp",
+    "Space": "togglePause",
+    "d": "noop"
+}
+```
+
+Modifier keys use `Ctrl+`, `Alt+`, `Meta+`, and `Shift+` prefixes (e.g., `"Ctrl+d": "pageDown"`).
+
 ## Command Mode
 
 Press `:` to enter command mode. Available commands:
