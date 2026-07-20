@@ -1,10 +1,18 @@
 import { state } from './state.js';
+import { invoke } from './tauri.js';
 import { updateStatus, updateModeIndicators } from './ui.js';
 import { renderPlaylist } from './views/playlist.js';
 import { renderFolderView } from './views/folder.js';
 import { scrollToSelected, scrollToFolderSelected } from './navigation.js';
 import { showAddToPlaylistPicker, getSelectedTrackPaths } from './playlists.js';
 import { updateQueueDisplay } from './queue.js';
+
+// Sync the backend playlist with the frontend state
+function syncBackendPlaylist() {
+    invoke('set_playlist', { paths: state.playlist.map(t => t.path) }).catch(err => {
+        console.error('Failed to sync backend playlist:', err);
+    });
+}
 
 // Remove queue entries pointing to deleted indices and shift remaining indices
 function cleanupQueueIndices(startIdx, endIdx) {
@@ -380,6 +388,7 @@ export function deleteSelectedTracks() {
     const minIdx = Math.min(...indicesToDelete);
     const maxIdx = Math.max(...indicesToDelete);
     cleanupQueueIndices(minIdx, maxIdx);
+    syncBackendPlaylist();
     
     renderPlaylist();
     updateStatus(`Deleted ${indicesToDelete.length} track${indicesToDelete.length > 1 ? 's' : ''}`);
@@ -425,6 +434,7 @@ export function deleteToEnd() {
     
     // Clean up queue indices
     cleanupQueueIndices(startIdx, endIdx);
+    syncBackendPlaylist();
     
     renderPlaylist();
     updateStatus(`Deleted ${count} track${count > 1 ? 's' : ''} to end`);
@@ -468,6 +478,7 @@ export function undoDelete() {
         state.selectedIndex = lastDelete.tracks[0].index;
     }
     
+    syncBackendPlaylist();
     renderPlaylist();
     updateStatus(`Restored ${lastDelete.tracks.length} track${lastDelete.tracks.length > 1 ? 's' : ''}`);
 }
@@ -516,6 +527,7 @@ export function deleteTrackRange(start, end) {
     
     // Clean up queue indices
     cleanupQueueIndices(startIdx, endIdx);
+    syncBackendPlaylist();
     
     renderPlaylist();
     updateStatus(`Deleted ${count} track${count > 1 ? 's' : ''} (lines ${start}-${end})`);
