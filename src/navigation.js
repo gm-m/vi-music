@@ -1,6 +1,6 @@
 import { state, elements } from './state.js';
 import { updateStatus } from './ui.js';
-import { formatDuration } from './utils.js';
+import { formatDuration, syncBackendPlaylist } from './utils.js';
 import { renderPlaylist } from './views/playlist.js';
 import { renderFolderView } from './views/folder.js';
 import { invoke } from './tauri.js';
@@ -121,6 +121,7 @@ export function moveTrackDown() {
     else if (state.playingIndex === idx + 1) state.playingIndex = idx;
     
     state.selectedIndex = idx + 1;
+    syncBackendPlaylist();
     renderPlaylist();
     updateStatus('Moved track down');
 }
@@ -136,6 +137,7 @@ export function moveTrackUp() {
     else if (state.playingIndex === idx - 1) state.playingIndex = idx;
     
     state.selectedIndex = idx - 1;
+    syncBackendPlaylist();
     renderPlaylist();
     updateStatus('Moved track up');
 }

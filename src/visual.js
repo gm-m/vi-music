@@ -1,18 +1,11 @@
 import { state } from './state.js';
-import { invoke } from './tauri.js';
 import { updateStatus, updateModeIndicators } from './ui.js';
 import { renderPlaylist } from './views/playlist.js';
 import { renderFolderView } from './views/folder.js';
 import { scrollToSelected, scrollToFolderSelected } from './navigation.js';
 import { showAddToPlaylistPicker, getSelectedTrackPaths } from './playlists.js';
 import { updateQueueDisplay } from './queue.js';
-
-// Sync the backend playlist with the frontend state
-function syncBackendPlaylist() {
-    invoke('set_playlist', { paths: state.playlist.map(t => t.path) }).catch(err => {
-        console.error('Failed to sync backend playlist:', err);
-    });
-}
+import { syncBackendPlaylist } from './utils.js';
 
 // Remove queue entries pointing to deleted indices and shift remaining indices
 function cleanupQueueIndices(startIdx, endIdx) {
