@@ -243,7 +243,8 @@ export function executeCommand(cmd) {
             if (parts[1]) {
                 savePlaylist(parts.slice(1).join(' '));
             } else {
-                updateStatus('Usage: :save <playlist name>');
+                // :w without args — save the currently loaded playlist in place
+                savePlaylist(null);
             }
             break;
         case 'load':

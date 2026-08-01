@@ -85,6 +85,7 @@ export async function scanLibrary() {
         state.selectedIndex = 0;
         state.viewMode = 'list';
         state.rootFolder = 'Library';
+        state.currentPlaylistName = null;
         renderPlaylist();
         updateStatus(`Library: ${allTracks.length} tracks from ${folders.length} folder${folders.length > 1 ? 's' : ''}`);
     } catch (err) {

@@ -1,6 +1,7 @@
 // Application State
 export const state = {
     playlist: [],
+    currentPlaylistName: null, // Name of the currently loaded playlist (for :w without args)
     filteredPlaylist: [],
     filterText: '',
     selectedIndex: 0,

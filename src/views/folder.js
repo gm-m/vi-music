@@ -32,6 +32,7 @@ export async function loadFolder(path) {
         state.rootFolder = path;
         state.currentFolder = path;
         state.viewMode = 'list';
+        state.currentPlaylistName = null;
         renderPlaylist();
         updateStatus(`Loaded ${tracks.length} tracks`);
     } catch (err) {
@@ -288,6 +289,7 @@ export async function loadCurrentFolderAsPlaylist() {
         state.playingIndex = -1;
         state.queue = [];
         state.viewMode = 'list';
+        state.currentPlaylistName = null;
         renderPlaylist();
         updateViewModeIndicator();
         updateStatus(`Loaded ${tracks.length} tracks from folder`);

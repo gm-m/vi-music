@@ -4,23 +4,40 @@ import { escapeHtml } from './utils.js';
 import { updateStatus } from './ui.js';
 import { renderPlaylist } from './views/playlist.js';
 
-export async function savePlaylist(name) {
+export async function savePlaylist(name, { silentIfExists = false } = {}) {
     if (state.playlist.length === 0) {
         updateStatus('No tracks to save');
         return;
     }
-    
+
+    // If no name provided, fall back to the currently loaded playlist
+    if (!name) {
+        name = state.currentPlaylistName;
+    }
+    if (!name) {
+        updateStatus('Usage: :save <playlist name>');
+        return;
+    }
+
     try {
         // Check if playlist already exists
         const playlists = await invoke('list_playlists');
         const exists = playlists.some(p => p.name.toLowerCase() === name.toLowerCase());
-        
-        if (exists && !confirm(`Playlist "${name}" already exists. Overwrite?`)) {
+
+        // Skip the overwrite prompt when re-saving the current playlist
+        // (or when explicitly requested via silentIfExists)
+        const isCurrent = state.currentPlaylistName
+            && state.currentPlaylistName.toLowerCase() === name.toLowerCase();
+
+        if (exists && !isCurrent && !silentIfExists
+            && !confirm(`Playlist "${name}" already exists. Overwrite?`)) {
             updateStatus('Save cancelled');
             return;
         }
-        
+
         await invoke('save_playlist', { name });
+        // Track this as the current playlist so a subsequent :w saves in place
+        state.currentPlaylistName = name;
         updateStatus(`Playlist "${name}" saved (${state.playlist.length} tracks)`);
     } catch (err) {
         console.error('Failed to save playlist:', err);
@@ -43,6 +60,7 @@ export async function loadSavedPlaylist(name) {
         state.playingIndex = -1;
         state.viewMode = 'list';
         state.rootFolder = `Playlist: ${name}`;
+        state.currentPlaylistName = name;
         renderPlaylist();
         updateStatus(`Loaded "${name}" (${tracks.length} tracks)`);
     } catch (err) {
@@ -61,6 +79,9 @@ export async function renamePlaylist(oldName, newName) {
         // Update rootFolder if we're viewing the renamed playlist
         if (state.rootFolder === `Playlist: ${oldName}`) {
             state.rootFolder = `Playlist: ${newName}`;
+        }
+        if (state.currentPlaylistName === oldName) {
+            state.currentPlaylistName = newName;
         }
     } catch (err) {
         console.error('Failed to rename playlist:', err);
