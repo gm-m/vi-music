@@ -190,6 +190,25 @@ export function deleteSelectedPlaylist() {
     }
 }
 
+export async function duplicateSelectedPlaylist() {
+    if (state.savedPlaylists.length === 0) return;
+    const playlist = state.savedPlaylists[state.playlistManagerIndex];
+    try {
+        const newName = await invoke('duplicate_playlist', { name: playlist.name });
+        updateStatus(`Duplicated "${playlist.name}" → "${newName}"`);
+        await refreshPlaylistManager();
+        // Move selection to the newly created copy
+        const idx = state.savedPlaylists.findIndex(p => p.name === newName);
+        if (idx >= 0) {
+            state.playlistManagerIndex = idx;
+            renderPlaylistManager();
+        }
+    } catch (err) {
+        console.error('Failed to duplicate playlist:', err);
+        updateStatus(`Error: ${err}`);
+    }
+}
+
 export function handlePlaylistManagerKeyDown(e) {
     switch (e.key) {
         case 'j':
@@ -230,6 +249,12 @@ export function handlePlaylistManagerKeyDown(e) {
             } else {
                 state.pendingKey = 'd';
             }
+            break;
+        case 'y':
+            // y = duplicate (yank a copy) the selected playlist
+            e.preventDefault();
+            duplicateSelectedPlaylist();
+            state.pendingKey = null;
             break;
         case 'Escape':
         case 'q':

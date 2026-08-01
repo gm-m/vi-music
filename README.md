@@ -223,7 +223,7 @@ Press `Tab` in command mode to autocomplete command names.
 - `:cleardefault` or `:cd` - Clear default folder
 - `:save <name>` or `:w <name>` - Save current playlist
 - `:load <name>` or `:e <name>` - Load a saved playlist
-- `:playlists` or `:pl` - Open playlist manager
+- `:playlists` or `:pl` - Open playlist manager (inside: `j`/`k` navigate, `Enter` load, `dd` delete, `y` duplicate, `q` close)
 - `:rename <old> > <new>` or `:rn` - Rename a playlist
 - `:delplaylist <name>` or `:dp <name>` - Delete a playlist
 - `:reload` or `:r` - Reload folder content

@@ -1362,6 +1362,42 @@ fn delete_playlist(name: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn duplicate_playlist(name: String) -> Result<String, String> {
+    let playlists_dir = get_playlists_dir().ok_or("Could not determine playlists directory")?;
+
+    let src_filename = format!("{}.json", sanitize_filename(&name));
+    let src_path = playlists_dir.join(&src_filename);
+
+    if !src_path.exists() {
+        return Err(format!("Playlist '{}' not found", name));
+    }
+
+    // Read the source playlist
+    let content = fs::read_to_string(&src_path).map_err(|e| e.to_string())?;
+    let mut playlist: SavedPlaylist = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+
+    // Generate a unique name: "name (copy)", "name (copy 2)", ...
+    let mut new_name = format!("{} (copy)", name);
+    let mut counter = 2;
+    loop {
+        let candidate_filename = format!("{}.json", sanitize_filename(&new_name));
+        if !playlists_dir.join(&candidate_filename).exists() {
+            break;
+        }
+        new_name = format!("{} (copy {})", name, counter);
+        counter += 1;
+    }
+
+    playlist.name = new_name.clone();
+    let new_filename = format!("{}.json", sanitize_filename(&new_name));
+    let new_path = playlists_dir.join(&new_filename);
+    let new_content = serde_json::to_string_pretty(&playlist).map_err(|e| e.to_string())?;
+    fs::write(&new_path, new_content).map_err(|e| e.to_string())?;
+
+    Ok(new_name)
+}
+
+#[tauri::command]
 fn rename_playlist(old_name: String, new_name: String) -> Result<(), String> {
     let playlists_dir = get_playlists_dir().ok_or("Could not determine playlists directory")?;
     
@@ -1657,6 +1693,7 @@ fn main() {
             list_playlists,
             delete_playlist,
             rename_playlist,
+            duplicate_playlist,
             create_playlist,
             add_tracks_to_playlist,
             get_keybindings,
