@@ -209,6 +209,29 @@ export async function duplicateSelectedPlaylist() {
     }
 }
 
+export async function renameSelectedPlaylist() {
+    if (state.savedPlaylists.length === 0) return;
+    const playlist = state.savedPlaylists[state.playlistManagerIndex];
+    const newName = prompt(`Rename playlist "${playlist.name}" to:`, playlist.name);
+    if (!newName || !newName.trim() || newName.trim() === playlist.name) {
+        updateStatus('Rename cancelled');
+        return;
+    }
+    try {
+        await renamePlaylist(playlist.name, newName.trim());
+        await refreshPlaylistManager();
+        // Keep selection on the renamed playlist
+        const idx = state.savedPlaylists.findIndex(p => p.name === newName.trim());
+        if (idx >= 0) {
+            state.playlistManagerIndex = idx;
+            renderPlaylistManager();
+        }
+    } catch (err) {
+        console.error('Failed to rename playlist:', err);
+        updateStatus(`Error: ${err}`);
+    }
+}
+
 export function handlePlaylistManagerKeyDown(e) {
     switch (e.key) {
         case 'j':
@@ -254,6 +277,12 @@ export function handlePlaylistManagerKeyDown(e) {
             // y = duplicate (yank a copy) the selected playlist
             e.preventDefault();
             duplicateSelectedPlaylist();
+            state.pendingKey = null;
+            break;
+        case 'r':
+            // r = rename the selected playlist
+            e.preventDefault();
+            renameSelectedPlaylist();
             state.pendingKey = null;
             break;
         case 'Escape':
