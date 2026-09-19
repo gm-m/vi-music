@@ -138,6 +138,7 @@ function moveVisualSelectionDown() {
     state.selectedIndex += 1;
 
     renderPlaylist();
+    syncBackendPlaylist();
     updateStatus('Moved selection down');
 }
 
@@ -164,6 +165,7 @@ function moveVisualSelectionUp() {
     state.selectedIndex -= 1;
 
     renderPlaylist();
+    syncBackendPlaylist();
     updateStatus('Moved selection up');
 }
 
@@ -351,6 +353,7 @@ export function deleteSelectedTracks() {
     }));
     
     // Check if we're deleting the currently playing track
+    const previousPlayingIndex = state.playingIndex;
     let newPlayingIndex = state.playingIndex;
     
     for (const idx of indicesToDelete) {
@@ -374,7 +377,7 @@ export function deleteSelectedTracks() {
     // Push to undo stack
     state.deletedTracks.push({
         tracks: deletedTracks,
-        playingIndex: state.playingIndex,
+        playingIndex: previousPlayingIndex,
     });
     
     // Clean up queue indices
@@ -410,6 +413,7 @@ export function deleteToEnd() {
     }
     
     const count = endIdx - startIdx + 1;
+    const previousPlayingIndex = state.playingIndex;
     let newPlayingIndex = state.playingIndex;
     
     if (state.playingIndex >= startIdx) {
@@ -422,7 +426,7 @@ export function deleteToEnd() {
     
     state.deletedTracks.push({
         tracks: deletedTracks,
-        playingIndex: state.playingIndex,
+        playingIndex: previousPlayingIndex,
     });
     
     // Clean up queue indices
@@ -452,13 +456,7 @@ export function undoDelete() {
     // Otherwise adjust if tracks were inserted before it
     if (state.playingIndex === -1) {
         state.playingIndex = lastDelete.playingIndex;
-        // Adjust if the restored playing index needs updating
-        for (const { index } of lastDelete.tracks) {
-            if (index <= state.playingIndex) {
-                state.playingIndex++;
-            }
-        }
-    } else {
+    } else if (state.playingIndex >= 0) {
         for (const { index } of lastDelete.tracks) {
             if (index <= state.playingIndex) {
                 state.playingIndex++;
@@ -497,6 +495,7 @@ export function deleteTrackRange(start, end) {
     }
     
     // Check if we're deleting the currently playing track
+    const previousPlayingIndex = state.playingIndex;
     let newPlayingIndex = state.playingIndex;
     if (state.playingIndex >= startIdx && state.playingIndex <= endIdx) {
         newPlayingIndex = -1;
@@ -515,7 +514,7 @@ export function deleteTrackRange(start, end) {
     // Push to undo stack
     state.deletedTracks.push({
         tracks: deletedTracks,
-        playingIndex: state.playingIndex,
+        playingIndex: previousPlayingIndex,
     });
     
     // Clean up queue indices

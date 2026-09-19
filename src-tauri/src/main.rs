@@ -168,12 +168,15 @@ impl PlaybackState {
     
     fn get_elapsed(&self) -> u64 {
         if let Some(start) = self.start_time {
+            let speed = if self.speed <= 0.0 { 1.0 } else { self.speed as f64 };
             if self.is_paused {
                 if let Some(pause) = self.pause_time {
-                    return self.start_position + pause.duration_since(start).as_secs();
+                    let duration = pause.duration_since(start).as_secs_f64() * speed;
+                    return self.start_position + duration as u64;
                 }
             }
-            self.start_position + start.elapsed().as_secs()
+            let duration = start.elapsed().as_secs_f64() * speed;
+            self.start_position + duration as u64
         } else {
             0
         }
@@ -281,7 +284,7 @@ impl Iterator for SymphoniaSource {
     type Item = i16;
     
     fn next(&mut self) -> Option<Self::Item> {
-        if self.sample_index >= self.current_samples.len() {
+        while self.sample_index >= self.current_samples.len() {
             if !self.decode_next_packet() {
                 return None;
             }
@@ -307,6 +310,9 @@ impl rodio::Source for SymphoniaSource {
     }
     
     fn total_duration(&self) -> Option<std::time::Duration> {
+        if self.sample_rate == 0 {
+            return None;
+        }
         self.total_samples.map(|n| {
             std::time::Duration::from_secs(n / self.sample_rate as u64)
         })
@@ -355,9 +361,10 @@ impl AudioPlayer {
                 OutputStream::try_default().ok()
             }
             
-            fn play_file(path: &str, volume: f32, seek_secs: u64, stream_handle: &rodio::OutputStreamHandle, start_paused: bool) -> Option<Sink> {
+            fn play_file(path: &str, volume: f32, speed: f32, seek_secs: u64, stream_handle: &rodio::OutputStreamHandle, start_paused: bool) -> Option<Sink> {
                 let sink = Sink::try_new(stream_handle).ok()?;
                 sink.set_volume(volume);
+                sink.set_speed(speed);
                 // Start paused so no audio plays until caller sets start_time
                 sink.pause();
                 
@@ -399,10 +406,12 @@ impl AudioPlayer {
                                 sink.stop();
                             }
                             
+                            let current_speed = state_clone.lock().unwrap().speed;
+                            
                             // Try to play, recreating output stream if needed
                             let mut played = false;
                             if let Some(ref handle) = audio_output.as_ref().map(|(_, h)| h) {
-                                if let Some(sink) = play_file(&path, volume, skip_secs, handle, false) {
+                                if let Some(sink) = play_file(&path, volume, current_speed, skip_secs, handle, false) {
                                     current_sink = Some(sink);
                                     played = true;
                                 }
@@ -412,7 +421,7 @@ impl AudioPlayer {
                             if !played {
                                 audio_output = create_output_for_device(&selected_device_name);
                                 if let Some(ref handle) = audio_output.as_ref().map(|(_, h)| h) {
-                                    if let Some(sink) = play_file(&path, volume, skip_secs, handle, false) {
+                                    if let Some(sink) = play_file(&path, volume, current_speed, skip_secs, handle, false) {
                                         current_sink = Some(sink);
                                         played = true;
                                     }
@@ -473,11 +482,20 @@ impl AudioPlayer {
                                 sink.set_speed(speed);
                             }
                             let mut state = state_clone.lock().unwrap();
+                            let current_elapsed = state.get_elapsed();
+                            state.start_position = current_elapsed;
+                            if state.start_time.is_some() {
+                                state.start_time = Some(Instant::now());
+                            }
+                            if state.is_paused {
+                                state.pause_time = Some(Instant::now());
+                            }
                             state.speed = speed;
                         }
                         AudioCommand::Seek(position) => {
                             let state = state_clone.lock().unwrap();
                             let was_paused = state.is_paused;
+                            let speed = state.speed;
                             if let Some(ref path) = state.current_path.clone() {
                                 // Always recreate the sink for seeking since SymphoniaSource
                                 // doesn't support rodio's try_seek. The recreate approach
@@ -497,7 +515,7 @@ impl AudioPlayer {
                                 // Sink starts paused so we can set start_time before audio plays
                                 let mut played = false;
                                 if let Some(ref handle) = audio_output.as_ref().map(|(_, h)| h) {
-                                    if let Some(sink) = play_file(&path, volume, position, handle, true) {
+                                    if let Some(sink) = play_file(&path, volume, speed, position, handle, true) {
                                         current_sink = Some(sink);
                                         played = true;
                                     }
@@ -506,7 +524,7 @@ impl AudioPlayer {
                                 if !played {
                                     audio_output = create_output_for_device(&selected_device_name);
                                     if let Some(ref handle) = audio_output.as_ref().map(|(_, h)| h) {
-                                        if let Some(sink) = play_file(&path, volume, position, handle, true) {
+                                        if let Some(sink) = play_file(&path, volume, speed, position, handle, true) {
                                             current_sink = Some(sink);
                                             played = true;
                                         }
@@ -549,6 +567,7 @@ impl AudioPlayer {
                             let was_playing = state.start_time.is_some() && !state.is_paused;
                             let current_path = state.current_path.clone();
                             let current_position = state.get_elapsed();
+                            let speed = state.speed;
                             drop(state);
                             
                             // Get current volume before stopping
@@ -570,7 +589,7 @@ impl AudioPlayer {
                             if was_playing {
                                 if let Some(ref path) = current_path {
                                     if let Some(ref handle) = audio_output.as_ref().map(|(_, h)| h) {
-                                        if let Some(sink) = play_file(path, volume, current_position, handle, false) {
+                                        if let Some(sink) = play_file(path, volume, speed, current_position, handle, false) {
                                             current_sink = Some(sink);
                                             
                                             let mut state = state_clone.lock().unwrap();
@@ -757,6 +776,9 @@ fn symphonia_duration(path: &str) -> Option<u64> {
         .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)?;
     
     let sample_rate = track.codec_params.sample_rate? as u64;
+    if sample_rate == 0 {
+        return None;
+    }
     let n_frames = track.codec_params.n_frames?;
     
     Some(n_frames / sample_rate)
@@ -1236,7 +1258,7 @@ fn seek_relative(delta: i64, state: State<AppState>) -> Result<u64, String> {
     
     let current = state.player.get_elapsed() as i64;
     let duration = state.current_duration.lock().unwrap();
-    let max_pos = duration.unwrap_or(u64::MAX) as i64;
+    let max_pos = duration.map(|d| d as i64).unwrap_or(i64::MAX);
     
     let new_pos = (current + delta).max(0).min(max_pos) as u64;
     
@@ -1410,7 +1432,7 @@ fn rename_playlist(old_name: String, new_name: String) -> Result<(), String> {
         return Err(format!("Playlist '{}' not found", old_name));
     }
     
-    if new_path.exists() {
+    if old_path != new_path && new_path.exists() {
         return Err(format!("Playlist '{}' already exists", new_name));
     }
     
@@ -1421,7 +1443,9 @@ fn rename_playlist(old_name: String, new_name: String) -> Result<(), String> {
     
     let new_content = serde_json::to_string_pretty(&playlist).map_err(|e| e.to_string())?;
     fs::write(&new_path, new_content).map_err(|e| e.to_string())?;
-    fs::remove_file(&old_path).map_err(|e| e.to_string())?;
+    if old_path != new_path {
+        fs::remove_file(&old_path).map_err(|e| e.to_string())?;
+    }
     
     Ok(())
 }
@@ -1602,6 +1626,9 @@ fn scan_library_folder(folder: String) -> Result<Vec<TrackInfo>, String> {
     scan_folder_recursive(&path, &mut tracks);
     
     tracks.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    for (i, track) in tracks.iter_mut().enumerate() {
+        track.index = i;
+    }
     Ok(tracks)
 }
 
@@ -1641,7 +1668,7 @@ fn reveal_in_explorer(path: String) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         std::process::Command::new("explorer")
-            .args(["/select,", &path])
+            .arg(format!("/select,{}", path))
             .spawn()
             .map_err(|e| e.to_string())?;
     }

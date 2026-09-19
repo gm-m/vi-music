@@ -11,6 +11,7 @@ import { getLibraryFolders, addLibraryFolder, removeLibraryFolder, scanLibrary, 
 import { showAudioDevices, setAudioDevice, setAudioDeviceByIndex } from './devices.js';
 import { savePlaylist, loadSavedPlaylist, renamePlaylist, deletePlaylist, showPlaylistManager } from './playlists.js';
 import { deleteTrackRange } from './visual.js';
+import { syncBackendPlaylist } from './utils.js';
 import { invoke, open } from './tauri.js';
 
 const COMMAND_COMPLETIONS = [
@@ -182,8 +183,8 @@ export function executeCommand(cmd) {
         return;
     }
     
-    const parts = trimmed.toLowerCase().split(/\s+/);
-    const command = parts[0];
+    const rawParts = trimmed.split(/\s+/);
+    const command = rawParts[0].toLowerCase();
     
     switch (command) {
         case 'q':
@@ -200,8 +201,8 @@ export function executeCommand(cmd) {
             break;
         case 'play':
         case 'p':
-            if (parts[1]) {
-                const index = parseInt(parts[1]) - 1;
+            if (rawParts[1]) {
+                const index = parseInt(rawParts[1]) - 1;
                 if (index >= 0 && index < state.playlist.length) {
                     playTrack(index);
                 }
@@ -221,8 +222,8 @@ export function executeCommand(cmd) {
             break;
         case 'vol':
         case 'volume':
-            if (parts[1]) {
-                const vol = parseInt(parts[1]) / 100;
+            if (rawParts[1]) {
+                const vol = parseInt(rawParts[1]) / 100;
                 setVolume(vol);
             }
             break;
@@ -240,8 +241,8 @@ export function executeCommand(cmd) {
             break;
         case 'save':
         case 'w':
-            if (parts[1]) {
-                savePlaylist(parts.slice(1).join(' '));
+            if (rawParts[1]) {
+                savePlaylist(rawParts.slice(1).join(' '));
             } else {
                 // :w without args — save the currently loaded playlist in place
                 savePlaylist(null);
@@ -249,8 +250,8 @@ export function executeCommand(cmd) {
             break;
         case 'load':
         case 'e':
-            if (parts[1]) {
-                loadSavedPlaylist(parts.slice(1).join(' '));
+            if (rawParts[1]) {
+                loadSavedPlaylist(rawParts.slice(1).join(' '));
             } else {
                 showPlaylistManager();
             }
@@ -261,25 +262,25 @@ export function executeCommand(cmd) {
             break;
         case 'delplaylist':
         case 'dp':
-            if (parts[1]) {
-                deletePlaylist(parts.slice(1).join(' '));
+            if (rawParts[1]) {
+                deletePlaylist(rawParts.slice(1).join(' '));
             } else {
                 updateStatus('Usage: :delplaylist <playlist name>');
             }
             break;
         case 'rename':
         case 'rn':
-            if (parts[1] && parts[2]) {
+            if (rawParts[1] && rawParts[2]) {
                 // Find the separator between old and new name
-                const restArgs = parts.slice(1).join(' ');
+                const restArgs = rawParts.slice(1).join(' ');
                 // Support "oldname newname" or "oldname > newname"
                 let oldName, newName;
                 if (restArgs.includes('>')) {
                     [oldName, newName] = restArgs.split('>').map(s => s.trim());
                 } else {
                     // Assume first word is old name, rest is new name
-                    oldName = parts[1];
-                    newName = parts.slice(2).join(' ');
+                    oldName = rawParts[1];
+                    newName = rawParts.slice(2).join(' ');
                 }
                 if (oldName && newName) {
                     renamePlaylist(oldName, newName);
@@ -291,8 +292,8 @@ export function executeCommand(cmd) {
             }
             break;
         case 'sleep':
-            if (parts[1]) {
-                const arg = parts[1];
+            if (rawParts[1]) {
+                const arg = rawParts[1];
                 // Check for +N or -N syntax to add/subtract time
                 if (arg.startsWith('+') || arg.startsWith('-')) {
                     const delta = parseInt(arg);
@@ -320,8 +321,8 @@ export function executeCommand(cmd) {
             }
             break;
         case 'mark':
-            if (parts[1] && parts[1].length === 1 && /[a-z]/i.test(parts[1])) {
-                setBookmark(parts[1].toLowerCase());
+            if (rawParts[1] && rawParts[1].length === 1 && /[a-z]/i.test(rawParts[1])) {
+                setBookmark(rawParts[1].toLowerCase());
             } else {
                 updateStatus('Usage: :mark <a-z>');
             }
@@ -331,16 +332,16 @@ export function executeCommand(cmd) {
             break;
         case 'delmark':
         case 'dm':
-            if (parts[1] && parts[1].length === 1 && /[a-z]/i.test(parts[1])) {
-                deleteBookmark(parts[1].toLowerCase());
+            if (rawParts[1] && rawParts[1].length === 1 && /[a-z]/i.test(rawParts[1])) {
+                deleteBookmark(rawParts[1].toLowerCase());
             } else {
                 updateStatus('Usage: :delmark <a-z>');
             }
             break;
         case 'jump':
         case 'j':
-            if (parts[1]) {
-                const jumpArg = parts[1].trim();
+            if (rawParts[1]) {
+                const jumpArg = rawParts[1].trim();
                 // Check for time format (m:ss or h:mm:ss)
                 if (jumpArg.includes(':')) {
                     const timeParts = jumpArg.split(':').map(Number);
@@ -381,8 +382,8 @@ export function executeCommand(cmd) {
             break;
         case 'removelib':
         case 'rl':
-            if (parts[1]) {
-                const index = parseInt(parts[1]) - 1;
+            if (rawParts[1]) {
+                const index = parseInt(rawParts[1]) - 1;
                 getLibraryFolders().then(folders => {
                     if (index >= 0 && index < folders.length) {
                         removeLibraryFolder(folders[index]);
@@ -413,13 +414,13 @@ export function executeCommand(cmd) {
             break;
         case 'device':
         case 'd':
-            if (parts[1]) {
-                const deviceNum = parseInt(parts[1]);
+            if (rawParts[1]) {
+                const deviceNum = parseInt(rawParts[1]);
                 if (!isNaN(deviceNum)) {
                     setAudioDeviceByIndex(deviceNum - 1);
                 } else {
                     // Treat as device name
-                    setAudioDevice(parts.slice(1).join(' '));
+                    setAudioDevice(rawParts.slice(1).join(' '));
                 }
             } else {
                 showAudioDevices();
@@ -430,15 +431,15 @@ export function executeCommand(cmd) {
             revealInExplorer();
             break;
         case 'sort':
-            if (parts[1]) {
-                sortPlaylist(parts[1]);
+            if (rawParts[1]) {
+                sortPlaylist(rawParts[1].toLowerCase());
             } else {
                 updateStatus('Usage: :sort name | duration | path (append ! to reverse)');
             }
             break;
         case 'set':
-            if (parts[1]) {
-                handleSetCommand(parts.slice(1).join(' '));
+            if (rawParts[1]) {
+                handleSetCommand(rawParts.slice(1).join(' '));
             } else {
                 showCurrentSettings();
             }
@@ -535,6 +536,7 @@ function sortPlaylist(field) {
     }
     
     renderPlaylist();
+    syncBackendPlaylist();
 }
 
 export async function revealInExplorer() {
@@ -584,6 +586,9 @@ export async function goBack() {
     
     if (previous === 'Library') {
         await scanLibrary();
+    } else if (previous.startsWith('Playlist: ')) {
+        const playlistName = previous.slice(10).trim();
+        await loadSavedPlaylist(playlistName);
     } else {
         await loadFolder(previous);
     }

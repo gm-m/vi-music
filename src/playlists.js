@@ -409,26 +409,28 @@ export function closeAddToPlaylistPicker() {
 }
 
 export async function confirmAddToPlaylist() {
+    const tracksToAdd = [...state.addToPlaylistTracks];
     if (state.addToPlaylistIndex === 0) {
         // New playlist - prompt for name
         closeAddToPlaylistPicker();
         const name = prompt('Enter playlist name:');
         if (name && name.trim()) {
-            await addTracksToPlaylistByName(name.trim());
+            await addTracksToPlaylistByName(name.trim(), tracksToAdd);
         }
     } else {
         // Existing playlist
         const playlist = state.savedPlaylists[state.addToPlaylistIndex - 1];
-        await addTracksToPlaylistByName(playlist.name);
+        await addTracksToPlaylistByName(playlist.name, tracksToAdd);
         closeAddToPlaylistPicker();
     }
 }
 
-export async function addTracksToPlaylistByName(name) {
+export async function addTracksToPlaylistByName(name, tracks = null) {
     try {
+        const trackList = tracks ?? state.addToPlaylistTracks;
         const added = await invoke('add_tracks_to_playlist', { 
             name, 
-            tracks: state.addToPlaylistTracks 
+            tracks: trackList 
         });
         updateStatus(`Added ${added} track${added !== 1 ? 's' : ''} to "${name}"`);
     } catch (err) {
