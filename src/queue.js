@@ -1,5 +1,5 @@
 import { state, elements } from './state.js';
-import { formatDuration } from './utils.js';
+import { escapeHtml, formatDuration } from './utils.js';
 import { updateStatus, updateModeIndicators } from './ui.js';
 import { playTrack } from './playback.js';
 
@@ -103,7 +103,7 @@ export function renderQueueView() {
         return `
             <div class="queue-item ${isSelected ? 'selected' : ''}" data-index="${queueIndex}">
                 <span class="queue-number">${queueIndex + 1}.</span>
-                <span class="queue-name">${track.name}</span>
+                <span class="queue-name">${escapeHtml(track.name)}</span>
                 <span class="queue-duration">${formatDuration(track.duration)}</span>
             </div>
         `;

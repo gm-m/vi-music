@@ -144,20 +144,20 @@ export function buildBreadcrumb(currentPath, rootPath) {
     const normCurrent = currentPath.replace(/\\/g, '/').replace(/\/$/, '');
     
     if (normCurrent === normRoot) {
-        return `<span class="breadcrumb-item">${getFolderName(normRoot)}</span>`;
+        return `<span class="breadcrumb-item">${escapeHtml(getFolderName(normRoot))}</span>`;
     }
     
     // Build relative path
     const relative = normCurrent.slice(normRoot.length + 1);
     const parts = relative.split('/');
     
-    let breadcrumb = `<span class="breadcrumb-item" data-path="${normRoot}">${getFolderName(normRoot)}</span>`;
+    let breadcrumb = `<span class="breadcrumb-item" data-path="${escapeHtml(normRoot)}">${escapeHtml(getFolderName(normRoot))}</span>`;
     
     let currentBuildPath = normRoot;
     for (let i = 0; i < parts.length; i++) {
         currentBuildPath += '/' + parts[i];
         const isLast = i === parts.length - 1;
-        breadcrumb += ` / <span class="${isLast ? '' : 'breadcrumb-item'}" ${isLast ? '' : `data-path="${currentBuildPath}"`}>${parts[i]}</span>`;
+        breadcrumb += ` / <span class="${isLast ? '' : 'breadcrumb-item'}" ${isLast ? '' : `data-path="${escapeHtml(currentBuildPath)}"`}>${escapeHtml(parts[i])}</span>`;
     }
     
     return breadcrumb;
