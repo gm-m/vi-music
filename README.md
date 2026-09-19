@@ -210,7 +210,7 @@ Modifier keys use `Ctrl+`, `Alt+`, `Meta+`, and `Shift+` prefixes (e.g., `"Ctrl+
 
 Press `:` to enter command mode. Available commands:
 
-Press `Tab` in command mode to autocomplete command names.
+Press `Tab` in command mode to autocomplete command names. Use `Up` and `Down` to navigate commands executed during the current session.
 
 - `:open` or `:o` - Open folder dialog
 - `:<n>` (e.g., `:42`) - Jump to line n

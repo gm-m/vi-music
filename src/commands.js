@@ -89,8 +89,42 @@ function autocompleteCommandInput() {
 }
 
 // Command Mode
+const COMMAND_HISTORY_LIMIT = 100;
+
+function setCommandInput(value) {
+    elements.commandInput.value = value;
+    elements.commandInput.setSelectionRange(value.length, value.length);
+}
+
+function addCommandToHistory(command) {
+    const trimmed = command.trim();
+    if (!trimmed || state.commandHistory.at(-1) === trimmed) return;
+    state.commandHistory.push(trimmed);
+    if (state.commandHistory.length > COMMAND_HISTORY_LIMIT) {
+        state.commandHistory.shift();
+    }
+}
+
+function navigateCommandHistory(direction) {
+    if (state.commandHistory.length === 0) return;
+    if (state.commandHistoryIndex === state.commandHistory.length) {
+        state.commandDraft = elements.commandInput.value;
+    }
+
+    state.commandHistoryIndex = Math.max(
+        0,
+        Math.min(state.commandHistory.length, state.commandHistoryIndex + direction),
+    );
+    const value = state.commandHistoryIndex === state.commandHistory.length
+        ? state.commandDraft
+        : state.commandHistory[state.commandHistoryIndex];
+    setCommandInput(value);
+}
+
 export function enterCommandMode() {
     state.mode = 'command';
+    state.commandHistoryIndex = state.commandHistory.length;
+    state.commandDraft = '';
     elements.modeIndicator.textContent = 'COMMAND';
     elements.modeIndicator.classList.add('command');
     elements.helpBar.style.display = 'none';
@@ -111,8 +145,15 @@ export function handleCommandInput(e) {
     e.stopPropagation();
     if (e.key === 'Enter') {
         e.preventDefault();
+        addCommandToHistory(elements.commandInput.value);
         executeCommand(elements.commandInput.value);
         exitCommandMode();
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        navigateCommandHistory(-1);
+    } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        navigateCommandHistory(1);
     } else if (e.key === 'Tab') {
         e.preventDefault();
         autocompleteCommandInput();

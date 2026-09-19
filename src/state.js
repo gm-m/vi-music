@@ -14,6 +14,9 @@ export const state = {
     mode: 'normal', // 'normal' | 'command' | 'filter' | 'visual'
     pendingKey: null, // for multi-key commands like 'gg'
     countPrefix: '', // for count prefixes like '3j', '5k'
+    commandHistory: [],
+    commandHistoryIndex: 0,
+    commandDraft: '',
     visualStart: -1, // Start index for visual selection
     lastVisualSelection: null, // { viewMode, visualStart, selectedIndex, folderSelectedIndex }
     elapsed: 0,
