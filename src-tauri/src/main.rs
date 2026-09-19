@@ -1560,6 +1560,18 @@ fn save_settings(settings: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn get_custom_theme() -> Result<String, String> {
+    let config_dir = get_config_dir().ok_or("Could not determine config directory")?;
+    let path = config_dir.join("theme.json");
+
+    if path.exists() {
+        fs::read_to_string(&path).map_err(|e| e.to_string())
+    } else {
+        Err("theme.json not found in the vi-music config directory".to_string())
+    }
+}
+
 // Library folder management
 #[tauri::command]
 fn get_library_folders() -> Result<Vec<String>, String> {
@@ -1727,6 +1739,7 @@ fn main() {
             save_keybindings,
             get_settings,
             save_settings,
+            get_custom_theme,
             get_library_folders,
             add_library_folder,
             remove_library_folder,

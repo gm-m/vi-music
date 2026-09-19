@@ -75,6 +75,7 @@ export const state = {
         volumestep: 0.05, // Volume change step (+/-)
         carryposition: false, // Keep current playback position when manually changing tracks
         remainingtime: false, // Show remaining time (countdown) instead of elapsed
+        theme: 'default',
     },
 };
 

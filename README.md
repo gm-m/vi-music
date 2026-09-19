@@ -255,6 +255,8 @@ Press `Tab` in command mode to autocomplete command names.
 - `:sort <field>` - Sort playlist (fields: `name`, `duration`, `path`)
 - `:sort <field>!` - Sort in reverse order (e.g., `:sort name!`)
 - `:set` - Show all current settings
+- `:themes` - List available themes
+- `:set theme=<name>` - Apply and persist a theme
 - `:help` or `:h` - Show help
 - `:quit` or `:q` - Quit application
 
@@ -270,6 +272,7 @@ Press `Tab` in command mode to autocomplete command names.
 | `volumestep` | `vs` | `0.05` | Volume change step (`+`/`-`) |
 | `carryposition` | `cp` | `false` | Keep the current playback timestamp when manually changing tracks |
 | `remainingtime` | `rt` | `false` | Show remaining time (countdown) instead of total duration |
+| `theme` | `th` | `default` | Color theme: `default`, `gruvbox`, `catppuccin`, `light`, or `custom` |
 
 Numeric settings are changed with `:set <setting>=<value>`, e.g., `:set seektime=10`.
 
@@ -280,6 +283,37 @@ Settings are persisted in the following locations depending on OS:
 | Windows | `%APPDATA%\vi-music\settings.json` |
 | macOS | `~/Library/Application Support/vi-music/settings.json` |
 | Linux | `~/.config/vi-music/settings.json` |
+
+### Custom Theme
+
+Set `:set theme=custom` to load an optional `theme.json` file from the same config directory:
+
+| OS | Path |
+|----|------|
+| Windows | `%APPDATA%\vi-music\theme.json` |
+| macOS | `~/Library/Application Support/vi-music/theme.json` |
+| Linux | `~/.config/vi-music/theme.json` |
+
+Only supported color properties are applied. Missing properties inherit the default theme. Example:
+
+```json
+{
+  "bg-primary": "#101014",
+  "bg-secondary": "#18181f",
+  "bg-tertiary": "#24242d",
+  "text-primary": "#f2f2f2",
+  "text-secondary": "#aaaaaf",
+  "text-muted": "#666670",
+  "accent": "#c678dd",
+  "accent-hover": "#d896ed",
+  "success": "#98c379",
+  "warning": "#e5c07b",
+  "border": "#353540",
+  "selection": "#453050"
+}
+```
+
+The optional properties `visual-selection`, `match-background`, `match-selection`, `selected-match-text`, `modal-overlay`, and `loading-overlay` are also supported. Values must be valid CSS colors; unknown properties are ignored.
 
 ## Prerequisites
 

@@ -2,6 +2,7 @@ import { invoke } from './tauri.js';
 import { state } from './state.js';
 import { updateStatus, updateProgressDisplay } from './ui.js';
 import { renderCurrentView } from './filter.js';
+import { applyTheme } from './themes.js';
 
 export async function loadSettings() {
     try {
@@ -9,6 +10,12 @@ export async function loadSettings() {
         const saved = JSON.parse(json);
         // Merge saved settings with defaults
         state.settings = { ...state.settings, ...saved };
+        try {
+            state.settings.theme = await applyTheme(state.settings.theme);
+        } catch (err) {
+            console.error('Failed to load theme:', err);
+            state.settings.theme = await applyTheme('default');
+        }
     } catch (err) {
         console.error('Failed to load settings:', err);
     }
@@ -22,7 +29,7 @@ export async function saveSettings() {
     }
 }
 
-export function handleSetCommand(arg) {
+export async function handleSetCommand(arg) {
     const trimmed = arg.trim();
     
     // Aliases for setting names
@@ -36,13 +43,14 @@ export function handleSetCommand(arg) {
         'vs': 'volumestep',
         'cp': 'carryposition',
         'rt': 'remainingtime',
+        'th': 'theme',
     };
     
     // Handle "no" prefix to disable (e.g., "norelativenumber")
     if (trimmed.startsWith('no')) {
         const setting = trimmed.slice(2);
         const resolved = aliases[setting] || setting;
-        if (resolved in state.settings) {
+        if (resolved in state.settings && typeof state.settings[resolved] === 'boolean') {
             state.settings[resolved] = false;
             saveSettings();
             renderCurrentView();
@@ -56,7 +64,7 @@ export function handleSetCommand(arg) {
     if (trimmed.endsWith('!')) {
         const setting = trimmed.slice(0, -1);
         const resolved = aliases[setting] || setting;
-        if (resolved in state.settings) {
+        if (resolved in state.settings && typeof state.settings[resolved] === 'boolean') {
             state.settings[resolved] = !state.settings[resolved];
             saveSettings();
             renderCurrentView();
@@ -81,6 +89,16 @@ export function handleSetCommand(arg) {
         const [setting, value] = trimmed.split('=');
         const resolvedSetting = aliases[setting] || setting;
         if (resolvedSetting in state.settings) {
+            if (resolvedSetting === 'theme') {
+                try {
+                    state.settings.theme = await applyTheme(value);
+                    await saveSettings();
+                    updateStatus(`theme=${state.settings.theme}`);
+                } catch (err) {
+                    updateStatus(`Failed to apply theme: ${err.message || err}`);
+                }
+                return;
+            }
             const currentType = typeof state.settings[resolvedSetting];
             if (currentType === 'boolean') {
                 state.settings[resolvedSetting] = value === 'true' || value === '1';

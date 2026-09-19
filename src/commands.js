@@ -13,6 +13,7 @@ import { savePlaylist, loadSavedPlaylist, renamePlaylist, deletePlaylist, showPl
 import { deleteTrackRange } from './visual.js';
 import { syncBackendPlaylist } from './utils.js';
 import { invoke, open } from './tauri.js';
+import { getThemeNames } from './themes.js';
 
 const COMMAND_COMPLETIONS = [
     'q', 'quit',
@@ -47,6 +48,7 @@ const COMMAND_COMPLETIONS = [
     'reveal', 'rv',
     'sort',
     'set',
+    'themes',
 ];
 
 function getCommonPrefix(values) {
@@ -443,6 +445,9 @@ export function executeCommand(cmd) {
             } else {
                 showCurrentSettings();
             }
+            break;
+        case 'themes':
+            updateStatus(`Themes: ${getThemeNames().join(', ')}. Use :set theme=<name>`);
             break;
     }
     
