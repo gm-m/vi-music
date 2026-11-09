@@ -1,5 +1,5 @@
 import { state, elements } from './state.js';
-import { formatDuration } from './utils.js';
+import { formatDuration, formatPreciseTime } from './utils.js';
 
 export function updateNowPlaying(name) {
     elements.trackName.textContent = name;
@@ -72,15 +72,15 @@ function updateCueMarkers() {
     const path = state.isPlaying ? state.playlist[state.playingIndex]?.path : null;
     const cues = (path && state.cues[path]) || [];
     const duration = state.duration > 0 ? state.duration : null;
-    const key = duration ? `${path}|${duration}|${cues.join(',')}` : '';
+    const key = duration ? `${path}|${duration}|${JSON.stringify(cues)}` : '';
     if (key === state.cueMarkersKey) return;
     state.cueMarkersKey = key;
     
     elements.cueMarkers.replaceChildren(...(duration ? cues : []).map((cue, i) => {
         const marker = document.createElement('div');
         marker.className = 'cue-marker';
-        marker.style.left = `${Math.min((cue / duration) * 100, 100)}%`;
-        marker.title = `Cue ${i + 1} @ ${formatDuration(cue)}`;
+        marker.style.left = `${Math.min((cue.time / duration) * 100, 100)}%`;
+        marker.title = `Cue ${i + 1} @ ${formatPreciseTime(cue.time)}${cue.label ? ` - ${cue.label}` : ''}`;
         return marker;
     }));
 }

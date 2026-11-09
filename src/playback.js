@@ -4,7 +4,7 @@ import { updateNowPlaying, updateStatus, updatePlayButton, updateVolumeDisplay, 
 import { scrollToSelected } from './navigation.js';
 import { renderPlaylist } from './views/playlist.js';
 import { handleFolderItemAction, renderFolderView } from './views/folder.js';
-import { updateQueueDisplay } from './queue.js';
+import { updateQueueDisplay, dequeueNextIndex } from './queue.js';
 
 // View-aware render: re-renders whichever view is currently active
 function renderCurrentView() {
@@ -15,6 +15,18 @@ function renderCurrentView() {
     } else {
         renderPlaylist();
     }
+}
+
+export function setElapsed(position) {
+    state.elapsed = position;
+    state.elapsedSyncedAt = performance.now();
+}
+
+// Current position estimated from the last backend sync (status is only polled every 500ms)
+export function getElapsed() {
+    if (!state.isPlaying || state.isPaused) return state.elapsed;
+    const estimate = state.elapsed + ((performance.now() - state.elapsedSyncedAt) / 1000) * state.speed;
+    return state.duration ? Math.min(estimate, state.duration) : estimate;
 }
 
 export async function playSelected() {
@@ -40,9 +52,9 @@ function getTrackStartPosition(index, seekPosition, allowCarryPosition) {
     }
     const targetDuration = state.playlist[index]?.duration;
     if (typeof targetDuration === 'number') {
-        return Math.min(state.elapsed, targetDuration);
+        return Math.min(getElapsed(), targetDuration);
     }
-    return state.elapsed;
+    return getElapsed();
 }
 
 export async function playTrack(index, seekPosition = null, allowCarryPosition = true) {
@@ -61,7 +73,7 @@ export async function playTrack(index, seekPosition = null, allowCarryPosition =
         state.isPlaying = true;
         state.isPaused = false;
         state.duration = result.duration;
-        state.elapsed = startPosition;
+        setElapsed(startPosition);
         updateNowPlaying(result.name);
         renderCurrentView();
         updatePlayButton();
@@ -188,10 +200,8 @@ export async function setSpeed(speed) {
 export async function seekRelative(delta) {
     try {
         const newPos = await invoke('seek_relative', { delta });
-        if (state.isPaused) {
-            state.elapsed = newPos;
-            updateProgressDisplay();
-        }
+        setElapsed(newPos);
+        updateProgressDisplay();
     } catch (err) {
         console.error('seek_relative failed:', err);
     }
@@ -200,10 +210,8 @@ export async function seekRelative(delta) {
 export async function seekTo(position) {
     try {
         const newPos = await invoke('seek', { position });
-        if (state.isPaused) {
-            state.elapsed = newPos;
-            updateProgressDisplay();
-        }
+        setElapsed(newPos);
+        updateProgressDisplay();
         return newPos;
     } catch (err) {
         console.error('seek failed:', err);
@@ -277,10 +285,12 @@ export function handleTrackEnd() {
     
     // Check queue first (unless repeat-one is active)
     if (state.repeatMode !== 'one' && state.queue.length > 0) {
-        const nextIndex = state.queue.shift();
-        playTrack(nextIndex, 0, false);
+        const nextIndex = dequeueNextIndex();
         updateQueueDisplay();
-        return;
+        if (nextIndex !== -1) {
+            playTrack(nextIndex, 0, false);
+            return;
+        }
     }
     
     if (state.repeatMode === 'one') {
@@ -357,7 +367,7 @@ export async function updateProgress() {
     
     try {
         const status = await invoke('get_status');
-        state.elapsed = status.elapsed;
+        setElapsed(status.elapsed);
         state.duration = status.duration;
         
         // Sync speed from backend
@@ -387,18 +397,21 @@ export function stopLoopMonitor() {
 
 export function startLoopMonitor() {
     stopLoopMonitor();
+    let seeking = false;
     
-    state.loopInterval = setInterval(() => {
+    state.loopInterval = setInterval(async () => {
         if (!state.isPlaying || state.loopA === null || state.loopB === null) {
             stopLoopMonitor();
             return;
         }
         
-        // Check if we've passed loop B point
-        if (state.elapsed >= state.loopB) {
-            seekTo(state.loopA);
+        // Check if we've passed loop B point (using the interpolated position)
+        if (!seeking && getElapsed() >= state.loopB) {
+            seeking = true;
+            await seekTo(state.loopA);
+            seeking = false;
         }
-    }, 100); // Check every 100ms for smooth looping
+    }, 25);
 }
 
 // Media control listener

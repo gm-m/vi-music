@@ -20,14 +20,23 @@ export function formatDuration(seconds) {
     if (seconds === null || seconds === undefined) {
         return '--:--';
     }
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
+    const whole = Math.floor(seconds);
+    const mins = Math.floor(whole / 60);
+    const secs = whole % 60;
     return `${mins}:${String(secs).padStart(2, '0')}`;
 }
 
-// Parse "s", "m:ss" or "h:mm:ss" into seconds; returns null if invalid
+// Like formatDuration, with tenths of a second (e.g. "1:23.4")
+export function formatPreciseTime(seconds) {
+    const tenths = Math.floor((seconds % 1) * 10 + 1e-6);
+    return `${formatDuration(seconds)}.${tenths}`;
+}
+
+// Parse "s", "m:ss" or "h:mm:ss" into seconds (last part may be fractional); null if invalid
 export function parseTime(text) {
-    const parts = text.split(':').map(p => (/^\d+$/.test(p) ? Number(p) : NaN));
-    if (parts.length > 3 || parts.some(isNaN)) return null;
-    return parts.reduce((total, p) => total * 60 + p, 0);
+    const parts = text.split(':');
+    if (parts.length > 3) return null;
+    const valid = parts.every((p, i) => (i === parts.length - 1 ? /^\d+(\.\d+)?$/ : /^\d+$/).test(p));
+    if (!valid) return null;
+    return parts.reduce((total, p) => total * 60 + Number(p), 0);
 }

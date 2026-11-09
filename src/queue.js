@@ -11,10 +11,8 @@ export function addToQueue() {
             updateStatus('Cannot queue a folder. Select a track.');
             return;
         }
-        // Find the track in the playlist by path
-        const playlistIdx = state.playlist.findIndex(t => t.path === item.path);
-        if (playlistIdx !== -1) {
-            state.queue.push(playlistIdx);
+        if (state.playlist.some(t => t.path === item.path)) {
+            state.queue.push(item.path);
             updateQueueDisplay();
             updateStatus(`Added to queue: ${item.name} (${state.queue.length} in queue)`);
         } else {
@@ -25,7 +23,7 @@ export function addToQueue() {
     if (state.playlist.length === 0) return;
     
     const track = state.playlist[state.selectedIndex];
-    state.queue.push(state.selectedIndex);
+    state.queue.push(track.path);
     updateQueueDisplay();
     updateStatus(`Added to queue: ${track.name} (${state.queue.length} in queue)`);
 }
@@ -54,11 +52,34 @@ export function clearQueue() {
     updateStatus('Queue cleared');
 }
 
+// Pop queued tracks until one is found in the current playlist; returns its index or -1
+export function dequeueNextIndex() {
+    while (state.queue.length > 0) {
+        const path = state.queue.shift();
+        const index = state.playlist.findIndex(t => t.path === path);
+        if (index !== -1) return index;
+    }
+    return -1;
+}
+
+// Drop queued paths that are no longer in the playlist (e.g. after deleting tracks)
+export function pruneQueue() {
+    const paths = new Set(state.playlist.map(t => t.path));
+    state.queue = state.queue.filter(path => paths.has(path));
+    if (state.queueSelectedIndex >= state.queue.length) {
+        state.queueSelectedIndex = Math.max(0, state.queue.length - 1);
+    }
+    updateQueueDisplay();
+}
+
+function getQueuedTrack(path) {
+    return state.playlist.find(t => t.path === path)
+        ?? { path, name: path.split(/[\\/]/).pop(), duration: null };
+}
+
 export function playFromQueue() {
-    if (state.queue.length === 0) return;
-    
-    const nextIndex = state.queue.shift();
-    playTrack(nextIndex);
+    const nextIndex = dequeueNextIndex();
+    if (nextIndex !== -1) playTrack(nextIndex);
     updateQueueDisplay();
 }
 
@@ -97,8 +118,8 @@ export function renderQueueView() {
         return;
     }
     
-    elements.queueList.innerHTML = state.queue.map((playlistIndex, queueIndex) => {
-        const track = state.playlist[playlistIndex];
+    elements.queueList.innerHTML = state.queue.map((path, queueIndex) => {
+        const track = getQueuedTrack(path);
         const isSelected = queueIndex === state.queueSelectedIndex;
         return `
             <div class="queue-item ${isSelected ? 'selected' : ''}" data-index="${queueIndex}">
@@ -205,9 +226,9 @@ export function handleQueueViewKeyDown(e) {
         case 'Enter':
             // Play selected queue item immediately
             if (state.queue.length > 0) {
-                const trackIndex = state.queue[state.queueSelectedIndex];
-                state.queue.splice(state.queueSelectedIndex, 1);
-                playTrack(trackIndex);
+                const [path] = state.queue.splice(state.queueSelectedIndex, 1);
+                const trackIndex = state.playlist.findIndex(t => t.path === path);
+                if (trackIndex !== -1) playTrack(trackIndex);
                 if (state.queueSelectedIndex >= state.queue.length) {
                     state.queueSelectedIndex = Math.max(0, state.queue.length - 1);
                 }
@@ -228,7 +249,7 @@ export function handleQueueViewKeyDown(e) {
 
 export function removeFromQueue(index) {
     if (index >= 0 && index < state.queue.length) {
-        const track = state.playlist[state.queue[index]];
+        const track = getQueuedTrack(state.queue[index]);
         state.queue.splice(index, 1);
         if (state.queueSelectedIndex >= state.queue.length) {
             state.queueSelectedIndex = Math.max(0, state.queue.length - 1);

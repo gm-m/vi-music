@@ -4,17 +4,8 @@ import { renderPlaylist } from './views/playlist.js';
 import { renderFolderView } from './views/folder.js';
 import { scrollToSelected, scrollToFolderSelected } from './navigation.js';
 import { showAddToPlaylistPicker, getSelectedTrackPaths } from './playlists.js';
-import { updateQueueDisplay } from './queue.js';
+import { updateQueueDisplay, pruneQueue } from './queue.js';
 import { syncBackendPlaylist } from './utils.js';
-
-// Remove queue entries pointing to deleted indices and shift remaining indices
-function cleanupQueueIndices(startIdx, endIdx) {
-    const count = endIdx - startIdx + 1;
-    state.queue = state.queue
-        .filter(idx => idx < startIdx || idx > endIdx)
-        .map(idx => idx > endIdx ? idx - count : idx);
-    updateQueueDisplay();
-}
 
 export function enterVisualMode() {
     if (state.viewMode === 'folder') {
@@ -179,9 +170,8 @@ export function addVisualSelectionToQueue() {
         selection.forEach(index => {
             const item = state.folderContents[index];
             if (item && !item.is_folder) {
-                const playlistIdx = state.playlist.findIndex(t => t.path === item.path);
-                if (playlistIdx !== -1) {
-                    state.queue.push(playlistIdx);
+                if (state.playlist.some(t => t.path === item.path)) {
+                    state.queue.push(item.path);
                     addedCount++;
                 }
             }
@@ -197,7 +187,7 @@ export function addVisualSelectionToQueue() {
     }
     
     selection.forEach(index => {
-        state.queue.push(index);
+        state.queue.push(state.playlist[index].path);
     });
     
     updateQueueDisplay();
@@ -380,10 +370,8 @@ export function deleteSelectedTracks() {
         playingIndex: previousPlayingIndex,
     });
     
-    // Clean up queue indices
-    const minIdx = Math.min(...indicesToDelete);
-    const maxIdx = Math.max(...indicesToDelete);
-    cleanupQueueIndices(minIdx, maxIdx);
+    // Drop deleted tracks from the queue
+    pruneQueue();
     syncBackendPlaylist();
     
     renderPlaylist();
@@ -429,8 +417,8 @@ export function deleteToEnd() {
         playingIndex: previousPlayingIndex,
     });
     
-    // Clean up queue indices
-    cleanupQueueIndices(startIdx, endIdx);
+    // Drop deleted tracks from the queue
+    pruneQueue();
     syncBackendPlaylist();
     
     renderPlaylist();
@@ -517,8 +505,8 @@ export function deleteTrackRange(start, end) {
         playingIndex: previousPlayingIndex,
     });
     
-    // Clean up queue indices
-    cleanupQueueIndices(startIdx, endIdx);
+    // Drop deleted tracks from the queue
+    pruneQueue();
     syncBackendPlaylist();
     
     renderPlaylist();

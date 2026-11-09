@@ -12,12 +12,13 @@ import { handleCommandInput, exitCommandMode } from './commands.js';
 import { handleFilterInput, handleFilterKeydown, exitFilterMode } from './filter.js';
 import { loadFolder } from './views/folder.js';
 import { loadCues } from './cues.js';
+import { loadBookmarks } from './features.js';
 
 // Initialize
 async function init() {
     await loadKeybindings();
     await loadSettings();
-    await loadCues();
+    await Promise.all([loadCues(), loadBookmarks()]);
     updateVolumeDisplay();
     setupEventListeners();
     setupMediaControlListener(listen);
@@ -65,8 +66,7 @@ function handleProgressBarClick(e) {
     
     const rect = elements.progressBar.getBoundingClientRect();
     const percent = (e.clientX - rect.left) / rect.width;
-    const position = Math.floor(percent * state.duration);
-    seekTo(position);
+    seekTo(Math.max(0, percent) * state.duration);
 }
 
 function handleVolumeBarClick(e) {

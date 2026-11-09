@@ -19,14 +19,15 @@ export const state = {
     commandDraft: '',
     visualStart: -1, // Start index for visual selection
     lastVisualSelection: null, // { viewMode, visualStart, selectedIndex, folderSelectedIndex }
-    elapsed: 0,
+    elapsed: 0, // Seconds (fractional) at the last sync with the backend
+    elapsedSyncedAt: 0, // performance.now() when elapsed was last synced
     duration: null,
     progressInterval: null,
     repeatMode: 'off', // 'off' | 'one' | 'all'
     shuffleMode: false,
     shuffleHistory: [],
     shuffleIndex: -1,
-    queue: [], // Array of playlist indices to play next
+    queue: [], // Array of track paths to play next
     queueViewOpen: false,
     queueSelectedIndex: 0,
     // Folder browsing
@@ -58,7 +59,7 @@ export const state = {
     sleepTimerInterval: null,
     // Bookmarks: { 'a': { track: 'path', position: seconds }, ... }
     bookmarks: {},
-    // Cue points per track (persisted): { 'path': [seconds, ...] } sorted ascending
+    // Cue points per track (persisted): { 'path': [{ time, label? }, ...] } sorted by time
     cues: {},
     cueMarkersKey: null, // Cache key to avoid re-rendering cue markers every tick
     // A-B Loop

@@ -1,7 +1,8 @@
 import { state } from './state.js';
+import { invoke } from './tauri.js';
 import { formatDuration } from './utils.js';
 import { updateStatus, updateSleepTimerDisplay, updateLoopDisplay } from './ui.js';
-import { seekTo, playTrack, stop, stopLoopMonitor, startLoopMonitor } from './playback.js';
+import { seekTo, playTrack, stop, stopLoopMonitor, startLoopMonitor, getElapsed } from './playback.js';
 
 // Sleep Timer
 export function setSleepTimer(minutes) {
@@ -67,21 +68,36 @@ export function clearSleepTimer() {
     updateSleepTimerDisplay(0);
 }
 
-// Bookmarks
+// Bookmarks (persisted in bookmarks.json): { 'a': { track: path, position: seconds } }
+export async function loadBookmarks() {
+    try {
+        state.bookmarks = await invoke('get_bookmarks');
+    } catch (err) {
+        console.error('Failed to load bookmarks:', err);
+        state.bookmarks = {};
+    }
+}
+
+async function saveBookmarks() {
+    try {
+        await invoke('save_bookmarks', { bookmarks: state.bookmarks });
+    } catch (err) {
+        console.error('Failed to save bookmarks:', err);
+        updateStatus(`Failed to save bookmarks: ${err}`);
+    }
+}
+
 export function setBookmark(key) {
-    if (!state.isPlaying) {
+    const track = state.isPlaying ? state.playlist[state.playingIndex] : null;
+    if (!track) {
         updateStatus('No track playing to bookmark');
         return;
     }
     
-    const track = state.playlist[state.playingIndex];
-    state.bookmarks[key] = {
-        track: track.path,
-        trackIndex: state.playingIndex,
-        position: state.elapsed
-    };
-    
-    updateStatus(`Bookmark '${key}' set at ${formatDuration(state.elapsed)}`);
+    const position = getElapsed();
+    state.bookmarks[key] = { track: track.path, position };
+    saveBookmarks();
+    updateStatus(`Bookmark '${key}' set at ${formatDuration(position)}`);
 }
 
 export function jumpToBookmark(key) {
@@ -111,6 +127,7 @@ export function jumpToBookmark(key) {
 export function deleteBookmark(key) {
     if (state.bookmarks[key]) {
         delete state.bookmarks[key];
+        saveBookmarks();
         updateStatus(`Bookmark '${key}' deleted`);
     } else {
         updateStatus(`No bookmark '${key}'`);
@@ -126,7 +143,8 @@ export function showBookmarks() {
     
     const list = keys.map(k => {
         const b = state.bookmarks[k];
-        const trackName = state.playlist.find(t => t.path === b.track)?.name || 'Unknown';
+        const trackName = state.playlist.find(t => t.path === b.track)?.name
+            || `${b.track.split(/[\\/]/).pop()} (not in playlist)`;
         return `'${k}': ${trackName} @ ${formatDuration(b.position)}`;
     }).join(', ');
     
@@ -140,7 +158,7 @@ export function setLoopA() {
         return;
     }
     
-    state.loopA = state.elapsed;
+    state.loopA = getElapsed();
     state.loopB = null; // Reset B when setting new A
     stopLoopMonitor();
     updateLoopDisplay();
@@ -158,12 +176,13 @@ export function setLoopB() {
         return;
     }
     
-    if (state.elapsed <= state.loopA) {
+    const position = getElapsed();
+    if (position <= state.loopA) {
         updateStatus('Loop B must be after loop A');
         return;
     }
     
-    state.loopB = state.elapsed;
+    state.loopB = position;
     startLoopMonitor();
     updateLoopDisplay();
     updateStatus(`Loop: ${formatDuration(state.loopA)} - ${formatDuration(state.loopB)}`);

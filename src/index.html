@@ -318,10 +318,14 @@
                     </div>
                     <div class="help-section">
                         <h3>Cues (playing track)</h3>
-                        <div class="shortcut"><kbd>:cue add [m:ss]</kbd> Add cue (default: current position)</div>
+                        <div class="shortcut"><kbd>:cue add [m:ss] [label]</kbd> Add cue (default: current position)</div>
+                        <div class="shortcut"><kbd>:cue label [n] &lt;text&gt;</kbd> Label cue n (default: nearest)</div>
                         <div class="shortcut"><kbd>:cue del [n]</kbd> Delete cue n (default: nearest)</div>
                         <div class="shortcut"><kbd>:cue list</kbd> / <kbd>:cues</kbd> List cues</div>
                         <div class="shortcut"><kbd>:cue clear</kbd> Remove all cues</div>
+                        <div class="shortcut"><kbd>:cue export[!] [file]</kbd> Write .cue sheet (default: next to track)</div>
+                        <div class="shortcut"><kbd>:cue import [file]</kbd> Merge cues from a .cue sheet</div>
+                        <div class="shortcut"><kbd>:prune</kbd> Forget cues/bookmarks of missing files</div>
                     </div>
                     <div class="help-section">
                         <h3>File Explorer</h3>

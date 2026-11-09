@@ -12,7 +12,7 @@ import { showAudioDevices, setAudioDevice, setAudioDeviceByIndex } from './devic
 import { savePlaylist, loadSavedPlaylist, renamePlaylist, deletePlaylist, showPlaylistManager } from './playlists.js';
 import { deleteTrackRange } from './visual.js';
 import { syncBackendPlaylist, parseTime } from './utils.js';
-import { addCue, deleteCue, clearCues, listCues } from './cues.js';
+import { addCue, deleteCue, labelCue, clearCues, listCues, exportCues, importCues, pruneMissing } from './cues.js';
 import { invoke, open } from './tauri.js';
 import { getThemeNames } from './themes.js';
 
@@ -39,6 +39,7 @@ const COMMAND_COMPLETIONS = [
     'delmark', 'dm',
     'cue',
     'cues',
+    'prune',
     'jump', 'j',
     'addlib', 'al',
     'libs', 'library',
@@ -385,10 +386,13 @@ export function executeCommand(cmd) {
             }
             break;
         case 'cue':
-            handleCueCommand(rawParts[1]?.toLowerCase(), rawParts[2]);
+            handleCueCommand(rawParts[1]?.toLowerCase(), rawParts.slice(2));
             break;
         case 'cues':
             listCues();
+            break;
+        case 'prune':
+            pruneMissing();
             break;
         case 'jump':
         case 'j':
@@ -509,36 +513,35 @@ export function executeCommand(cmd) {
     }
 }
 
-function handleCueCommand(sub, arg) {
+function handleCueCommand(sub, args) {
+    const [first, ...rest] = args;
+    const firstNumber = /^\d+$/.test(first ?? '') ? parseInt(first) : null;
     switch (sub) {
         case 'add':
         case 'a': {
-            if (!arg) {
-                addCue();
-                break;
-            }
-            const seconds = parseTime(arg);
-            if (seconds === null) {
-                updateStatus('Invalid time format. Use s, m:ss or h:mm:ss');
-            } else {
-                addCue(seconds);
-            }
+            // :cue add [time] [label...] - if the first arg isn't a time, it's part of the label
+            const seconds = first !== undefined ? parseTime(first) : null;
+            const labelParts = seconds === null ? args : rest;
+            addCue(seconds, labelParts.join(' ') || null);
             break;
         }
         case 'del':
-        case 'd': {
-            if (!arg) {
-                deleteCue();
-                break;
-            }
-            const number = parseInt(arg);
-            if (isNaN(number)) {
+        case 'd':
+            if (first !== undefined && firstNumber === null) {
                 updateStatus('Usage: :cue del [n]');
             } else {
-                deleteCue(number);
+                deleteCue(firstNumber);
             }
             break;
-        }
+        case 'label':
+        case 'l':
+            // :cue label [n] <text> - without n, labels the cue nearest to the current position
+            if (firstNumber !== null) {
+                labelCue(firstNumber, rest.join(' '));
+            } else {
+                labelCue(null, args.join(' '));
+            }
+            break;
         case 'list':
         case 'ls':
         case undefined:
@@ -547,8 +550,15 @@ function handleCueCommand(sub, arg) {
         case 'clear':
             clearCues();
             break;
+        case 'export':
+        case 'export!':
+            exportCues(args.join(' ') || null, sub === 'export!');
+            break;
+        case 'import':
+            importCues(args.join(' ') || null);
+            break;
         default:
-            updateStatus('Usage: :cue add [m:ss] | del [n] | list | clear');
+            updateStatus('Usage: :cue add [m:ss] [label] | del [n] | label [n] <text> | list | clear | export[!] [file] | import [file]');
     }
 }
 
@@ -624,14 +634,7 @@ function sortPlaylist(field) {
         if (state.selectedIndex < 0) state.selectedIndex = 0;
     }
     
-    // Update queue indices (they reference playlist positions which have changed)
-    // Clear queue since indices are now invalid
-    if (state.queue.length > 0) {
-        state.queue = [];
-        updateStatus(`Sorted by ${key}${reverse ? ' (reversed)' : ''} — queue cleared`);
-    } else {
-        updateStatus(`Sorted by ${key}${reverse ? ' (reversed)' : ''}`);
-    }
+    updateStatus(`Sorted by ${key}${reverse ? ' (reversed)' : ''}`);
     
     renderPlaylist();
     syncBackendPlaylist();

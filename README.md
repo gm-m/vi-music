@@ -80,6 +80,8 @@ A minimal, VIM-style music player built with Tauri and vanilla JavaScript.
 | `C` (Shift+c) | Clear loop |
 
 ### Bookmarks
+Bookmarks are saved in `bookmarks.json` in the config directory.
+
 | Key | Action |
 |-----|--------|
 | `m` + `a-z` | Set bookmark at current position |
@@ -254,10 +256,14 @@ Press `Tab` in command mode to autocomplete command names. Use `Up` and `Down` t
 - `:mark <a-z>` - Set bookmark at current position
 - `:marks` - Show all bookmarks
 - `:delmark <a-z>` - Delete a bookmark
-- `:cue add [m:ss]` - Add a cue to the playing track (default: current position)
+- `:cue add [m:ss] [label]` - Add a cue to the playing track (default: current position; time may be fractional, e.g. `1:23.5`)
+- `:cue label [n] <text>` - Set the label of cue n (default: nearest cue); no text clears it
 - `:cue del [n]` - Delete cue n (default: cue nearest to current position)
 - `:cue list` or `:cues` - List cues of the playing track
 - `:cue clear` - Remove all cues from the playing track
+- `:cue export [file]` - Export cues as a CUE sheet (default: `<track>.cue` next to the audio file; `export!` overwrites)
+- `:cue import [file]` - Merge cues from a CUE sheet (without a file, opens a file picker)
+- `:prune` - Remove cues, bookmarks and cached metadata of files that no longer exist
 - `:<line>d` - Delete track at line number (e.g., `:5d`)
 - `:<start>,<end>d` - Delete range of tracks (e.g., `:10,20d`)
 - `:set <option>` - Enable a setting (e.g., `:set relativenumber`)

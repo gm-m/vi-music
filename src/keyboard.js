@@ -2,7 +2,7 @@ import { state } from './state.js';
 import { closeModals, toggleHelp, updateStatus } from './ui.js';
 import { getKeyString, getKeyAction } from './keybindings.js';
 import { moveSelection, goToTop, goToBottom, selectTrack, scrollToSelected, goToPlayingTrack, centerSelection, scrollSelectionTop, scrollSelectionBottom, moveTrackDown, moveTrackUp, findNextArtist, findPrevArtist, navBack } from './navigation.js';
-import { playSelected, togglePause, stop, nextTrack, prevTrack, adjustVolume, toggleMute, changeSpeed, resetSpeed, seekRelative, toggleRepeat, toggleShuffle, seekToStart, seekToEnd } from './playback.js';
+import { playSelected, togglePause, stop, nextTrack, prevTrack, adjustVolume, toggleMute, changeSpeed, resetSpeed, seekRelative, toggleRepeat, toggleShuffle, seekToStart, seekToEnd, getElapsed } from './playback.js';
 import { enterCommandMode, goBack, revealInExplorer } from './commands.js';
 import { enterFilterMode, clearFilter, jumpToNextMatch, jumpToPrevMatch } from './filter.js';
 import { enterVisualMode, handleVisualModeKeyDown, deleteSelectedTracks, deleteTrack, deleteToEnd, undoDelete, restoreLastVisualSelection } from './visual.js';
@@ -371,7 +371,7 @@ function showNowPlayingInfo() {
     const track = state.playlist[state.playingIndex];
     if (!track) return;
     
-    const pos = formatDuration(state.elapsed);
+    const pos = formatDuration(getElapsed());
     const dur = formatDuration(state.duration);
     const speed = state.speed !== 1.0 ? ` @ ${state.speed.toFixed(2)}x` : '';
     updateStatus(`${track.name} | ${pos}/${dur}${speed} | vol ${Math.round(state.volume * 100)}%`);

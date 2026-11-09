@@ -4,8 +4,9 @@
 )]
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -50,6 +51,11 @@ struct TrackMeta {
     path: String,
     artist: Option<String>,
     title: Option<String>,
+    // File modification time (unix secs) and size, used to detect stale cache entries
+    #[serde(default)]
+    mtime: u64,
+    #[serde(default)]
+    size: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default)]
@@ -86,32 +92,45 @@ fn save_config(config: &AppConfig) -> Result<(), String> {
     Ok(())
 }
 
-fn get_metadata_cache_path() -> Option<PathBuf> {
-    dirs::config_dir().map(|p| p.join("vi-music").join("metadata_cache.json"))
+const METADATA_CACHE_FILE: &str = "metadata_cache.json";
+
+// Read a JSON file from the config directory, falling back to the default value
+fn read_json<T: serde::de::DeserializeOwned + Default>(file: &str) -> T {
+    get_config_dir()
+        .and_then(|dir| fs::read_to_string(dir.join(file)).ok())
+        .and_then(|content| serde_json::from_str(&content).ok())
+        .unwrap_or_default()
 }
 
-fn load_metadata_cache() -> MetadataCache {
-    if let Some(path) = get_metadata_cache_path() {
-        if let Ok(content) = fs::read_to_string(&path) {
-            if let Ok(cache) = serde_json::from_str(&content) {
-                return cache;
-            }
-        }
-    }
-    MetadataCache::default()
+fn write_json<T: Serialize>(file: &str, value: &T) -> Result<(), String> {
+    let config_dir = get_config_dir().ok_or("Could not determine config directory")?;
+    fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
+    let content = serde_json::to_string_pretty(value).map_err(|e| e.to_string())?;
+    fs::write(config_dir.join(file), content).map_err(|e| e.to_string())
 }
 
-fn save_metadata_cache(cache: &MetadataCache) -> Result<(), String> {
-    let path = get_metadata_cache_path().ok_or("Could not determine cache path")?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    let content = serde_json::to_string_pretty(cache).map_err(|e| e.to_string())?;
-    fs::write(&path, content).map_err(|e| e.to_string())?;
-    Ok(())
+type MetadataMap = HashMap<String, TrackMeta>;
+
+fn load_metadata_cache() -> MetadataMap {
+    read_json::<MetadataCache>(METADATA_CACHE_FILE)
+        .tracks
+        .into_iter()
+        .map(|t| (t.path.clone(), t))
+        .collect()
 }
 
-fn extract_track_meta(path: &str) -> TrackMeta {
+fn save_metadata_cache(cache: &MetadataMap) -> Result<(), String> {
+    write_json(METADATA_CACHE_FILE, &MetadataCache { tracks: cache.values().cloned().collect() })
+}
+
+// (mtime in unix secs, size in bytes), or None if the file doesn't exist
+fn file_stamp(path: &str) -> Option<(u64, u64)> {
+    let meta = fs::metadata(path).ok()?;
+    let mtime = meta.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?.as_secs();
+    Some((mtime, meta.len()))
+}
+
+fn extract_track_meta(path: &str, mtime: u64, size: u64) -> TrackMeta {
     use lofty::{Accessor, TaggedFileExt};
     
     let mut artist = None;
@@ -128,24 +147,26 @@ fn extract_track_meta(path: &str) -> TrackMeta {
         path: path.to_string(),
         artist,
         title,
+        mtime,
+        size,
     }
 }
 
 #[derive(Clone)]
 enum AudioCommand {
-    Play(String, f32, u64),
+    Play(String, f32, f64),
     Pause,
     Resume,
     Stop,
     SetVolume(f32),
-    Seek(u64),
+    Seek(f64),
     SetSpeed(f32),
     SetDevice(String), // Device name to switch to
 }
 
 struct PlaybackState {
     start_time: Option<Instant>,
-    start_position: u64,
+    start_position: f64,
     is_paused: bool,
     pause_time: Option<Instant>,
     current_path: Option<String>,
@@ -157,7 +178,7 @@ impl PlaybackState {
     fn new() -> Self {
         Self {
             start_time: None,
-            start_position: 0,
+            start_position: 0.0,
             is_paused: false,
             pause_time: None,
             current_path: None,
@@ -166,19 +187,17 @@ impl PlaybackState {
         }
     }
     
-    fn get_elapsed(&self) -> u64 {
+    fn get_elapsed(&self) -> f64 {
         if let Some(start) = self.start_time {
             let speed = if self.speed <= 0.0 { 1.0 } else { self.speed as f64 };
             if self.is_paused {
                 if let Some(pause) = self.pause_time {
-                    let duration = pause.duration_since(start).as_secs_f64() * speed;
-                    return self.start_position + duration as u64;
+                    return self.start_position + pause.duration_since(start).as_secs_f64() * speed;
                 }
             }
-            let duration = start.elapsed().as_secs_f64() * speed;
-            self.start_position + duration as u64
+            self.start_position + start.elapsed().as_secs_f64() * speed
         } else {
-            0
+            0.0
         }
     }
 }
@@ -196,7 +215,7 @@ struct SymphoniaSource {
 }
 
 impl SymphoniaSource {
-    fn new(path: &str, seek_secs: u64) -> Option<Self> {
+    fn new(path: &str, seek_secs: f64) -> Option<Self> {
         let file = std::fs::File::open(path).ok()?;
         let mss = MediaSourceStream::new(Box::new(file), Default::default());
         
@@ -230,8 +249,8 @@ impl SymphoniaSource {
             .ok()?;
         
         // Seek if needed
-        if seek_secs > 0 {
-            let seek_ts = seek_secs * sample_rate as u64;
+        if seek_secs > 0.0 {
+            let seek_ts = (seek_secs * sample_rate as f64) as u64;
             let _ = format.seek(
                 SeekMode::Accurate,
                 SeekTo::TimeStamp { ts: seek_ts, track_id },
@@ -361,7 +380,7 @@ impl AudioPlayer {
                 OutputStream::try_default().ok()
             }
             
-            fn play_file(path: &str, volume: f32, speed: f32, seek_secs: u64, stream_handle: &rodio::OutputStreamHandle, start_paused: bool) -> Option<Sink> {
+            fn play_file(path: &str, volume: f32, speed: f32, seek_secs: f64, stream_handle: &rodio::OutputStreamHandle, start_paused: bool) -> Option<Sink> {
                 let sink = Sink::try_new(stream_handle).ok()?;
                 sink.set_volume(volume);
                 sink.set_speed(speed);
@@ -376,8 +395,8 @@ impl AudioPlayer {
                     let file = File::open(path).ok()?;
                     let source = Decoder::new(BufReader::new(file)).ok()?;
                     sink.append(source);
-                    if seek_secs > 0 {
-                        let _ = sink.try_seek(Duration::from_secs(seek_secs));
+                    if seek_secs > 0.0 {
+                        let _ = sink.try_seek(Duration::from_secs_f64(seek_secs));
                     }
                 }
                 // Only start playing if caller doesn't want it paused
@@ -450,12 +469,10 @@ impl AudioPlayer {
                             if let Some(ref sink) = current_sink {
                                 sink.play();
                                 let mut state = state_clone.lock().unwrap();
-                                if state.is_paused {
-                                    if let (Some(start), Some(pause)) = (state.start_time, state.pause_time) {
-                                        let paused_duration = pause.duration_since(start);
-                                        state.start_position += paused_duration.as_secs();
-                                        state.start_time = Some(Instant::now());
-                                    }
+                                if state.is_paused && state.start_time.is_some() {
+                                    // Position at pause time (accounts for speed and sub-second precision)
+                                    state.start_position = state.get_elapsed();
+                                    state.start_time = Some(Instant::now());
                                 }
                                 state.is_paused = false;
                                 state.pause_time = None;
@@ -467,7 +484,7 @@ impl AudioPlayer {
                             }
                             let mut state = state_clone.lock().unwrap();
                             state.start_time = None;
-                            state.start_position = 0;
+                            state.start_position = 0.0;
                             state.is_paused = false;
                             state.pause_time = None;
                             state.current_path = None;
@@ -617,8 +634,25 @@ impl AudioPlayer {
         let _ = self.command_tx.send(cmd);
     }
     
-    fn get_elapsed(&self) -> u64 {
+    fn get_elapsed(&self) -> f64 {
         self.playback_state.lock().unwrap().get_elapsed()
+    }
+    
+    // Update the reported position immediately, so status polls made before the audio
+    // thread has recreated the sink don't return the pre-seek position
+    fn seek(&self, position: f64) {
+        {
+            let mut state = self.playback_state.lock().unwrap();
+            if state.start_time.is_some() {
+                let now = Instant::now();
+                state.start_position = position;
+                state.start_time = Some(now);
+                if state.is_paused {
+                    state.pause_time = Some(now);
+                }
+            }
+        }
+        self.send(AudioCommand::Seek(position));
     }
     
     fn is_finished(&self) -> bool {
@@ -640,6 +674,8 @@ struct AppState {
     is_playing: Mutex<bool>,
     is_paused: Mutex<bool>,
     media_controls: Mutex<Option<MediaControls>>,
+    // Loaded lazily from disk on first use, then kept in memory
+    metadata_cache: Mutex<Option<MetadataMap>>,
 }
 
 impl AppState {
@@ -654,14 +690,45 @@ impl AppState {
             is_playing: Mutex::new(false),
             is_paused: Mutex::new(false),
             media_controls: Mutex::new(None),
+            metadata_cache: Mutex::new(None),
         }
+    }
+    
+    fn with_metadata_cache<R>(&self, f: impl FnOnce(&mut MetadataMap) -> R) -> R {
+        let mut guard = self.metadata_cache.lock().unwrap();
+        f(guard.get_or_insert_with(load_metadata_cache))
+    }
+    
+    // Metadata for the requested paths (in request order). Tags are (re)read only for
+    // new or modified files; entries for missing files are dropped from the cache.
+    fn track_metadata(&self, paths: &[String]) -> Vec<TrackMeta> {
+        self.with_metadata_cache(|cache| {
+            let mut dirty = false;
+            let mut result = Vec::with_capacity(paths.len());
+            for path in paths {
+                let Some((mtime, size)) = file_stamp(path) else {
+                    dirty |= cache.remove(path).is_some();
+                    continue;
+                };
+                let fresh = cache.get(path).map_or(false, |t| t.mtime == mtime && t.size == size);
+                if !fresh {
+                    cache.insert(path.clone(), extract_track_meta(path, mtime, size));
+                    dirty = true;
+                }
+                result.push(cache[path].clone());
+            }
+            if dirty {
+                let _ = save_metadata_cache(cache);
+            }
+            result
+        })
     }
     
     fn update_media_playback(&self, playing: bool, paused: bool) {
         if let Ok(mut controls) = self.media_controls.lock() {
             if let Some(ref mut mc) = *controls {
                 let progress = if playing {
-                    Some(MediaPosition(Duration::from_secs(self.player.get_elapsed())))
+                    Some(MediaPosition(Duration::from_secs_f64(self.player.get_elapsed())))
                 } else {
                     None
                 };
@@ -703,7 +770,7 @@ struct TrackInfo {
 #[derive(Serialize, Deserialize, Clone)]
 struct MediaControlPayload {
     action: String,
-    position: Option<u64>,
+    position: Option<f64>,
     delta: Option<i64>,
 }
 
@@ -794,7 +861,7 @@ struct PlayerStatus {
     volume: f32,
     speed: f32,
     playlist_length: usize,
-    elapsed: u64,
+    elapsed: f64,
     duration: Option<u64>,
 }
 
@@ -940,61 +1007,16 @@ fn set_audio_device(device_name: String, state: State<AppState>) {
 }
 
 #[tauri::command]
-fn scan_metadata(tracks: Vec<String>) -> Result<Vec<TrackMeta>, String> {
-    // Check cache first - build a set of already-cached paths
-    let mut cache = load_metadata_cache();
-    let cached_paths: std::collections::HashSet<String> = cache.tracks.iter().map(|t| t.path.clone()).collect();
-    
-    let mut new_tracks = Vec::new();
-    for path in &tracks {
-        if !cached_paths.contains(path) {
-            new_tracks.push(extract_track_meta(path));
-        }
-    }
-    
-    // Merge new tracks into cache
-    if !new_tracks.is_empty() {
-        cache.tracks.extend(new_tracks);
-        let _ = save_metadata_cache(&cache);
-    }
-    
-    // Return only metadata for the requested tracks
-    let requested: std::collections::HashSet<&String> = tracks.iter().collect();
-    let result: Vec<TrackMeta> = cache.tracks.iter()
-        .filter(|t| requested.contains(&t.path))
-        .cloned()
-        .collect();
-    
-    Ok(result)
+fn scan_metadata(tracks: Vec<String>, state: State<AppState>) -> Result<Vec<TrackMeta>, String> {
+    Ok(state.track_metadata(&tracks))
 }
 
 #[tauri::command]
-fn get_artists(tracks: Vec<String>) -> Result<Vec<ArtistInfo>, String> {
-    // Load cache, scan any uncached tracks
-    let mut cache = load_metadata_cache();
-    let cached_paths: std::collections::HashSet<String> = cache.tracks.iter().map(|t| t.path.clone()).collect();
-    
-    let mut new_tracks = Vec::new();
-    for path in &tracks {
-        if !cached_paths.contains(path) {
-            new_tracks.push(extract_track_meta(path));
-        }
-    }
-    
-    if !new_tracks.is_empty() {
-        cache.tracks.extend(new_tracks);
-        let _ = save_metadata_cache(&cache);
-    }
-    
-    // Build artist list from requested tracks
-    let requested: std::collections::HashSet<&String> = tracks.iter().collect();
-    let mut artist_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
-    
-    for track in &cache.tracks {
-        if requested.contains(&track.path) {
-            let artist_name = track.artist.clone().unwrap_or_else(|| "Unknown Artist".to_string());
-            *artist_counts.entry(artist_name).or_insert(0) += 1;
-        }
+fn get_artists(tracks: Vec<String>, state: State<AppState>) -> Result<Vec<ArtistInfo>, String> {
+    let mut artist_counts: HashMap<String, usize> = HashMap::new();
+    for track in state.track_metadata(&tracks) {
+        let artist_name = track.artist.unwrap_or_else(|| "Unknown Artist".to_string());
+        *artist_counts.entry(artist_name).or_insert(0) += 1;
     }
     
     let mut artists: Vec<ArtistInfo> = artist_counts.into_iter()
@@ -1007,17 +1029,11 @@ fn get_artists(tracks: Vec<String>) -> Result<Vec<ArtistInfo>, String> {
 }
 
 #[tauri::command]
-fn get_artist_tracks(artist: String, tracks: Vec<String>) -> Result<Vec<TrackInfo>, String> {
-    let cache = load_metadata_cache();
-    let requested: std::collections::HashSet<&String> = tracks.iter().collect();
-    
-    let mut result: Vec<TrackInfo> = cache.tracks.iter()
-        .filter(|t| {
-            requested.contains(&t.path) &&
-            t.artist.as_deref().unwrap_or("Unknown Artist") == artist
-        })
-        .enumerate()
-        .map(|(i, t)| {
+fn get_artist_tracks(artist: String, tracks: Vec<String>, state: State<AppState>) -> Result<Vec<TrackInfo>, String> {
+    let mut result: Vec<TrackInfo> = state.track_metadata(&tracks)
+        .into_iter()
+        .filter(|t| t.artist.as_deref().unwrap_or("Unknown Artist") == artist)
+        .map(|t| {
             let name = t.title.clone().unwrap_or_else(|| {
                 PathBuf::from(&t.path)
                     .file_name()
@@ -1026,16 +1042,15 @@ fn get_artist_tracks(artist: String, tracks: Vec<String>) -> Result<Vec<TrackInf
             });
             let duration = get_audio_duration(&t.path);
             TrackInfo {
-                path: t.path.clone(),
+                path: t.path,
                 name,
-                index: i,
+                index: 0, // Set after sorting
                 duration,
             }
         })
         .collect();
     
     result.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
-    // Re-index after sort
     for (i, track) in result.iter_mut().enumerate() {
         track.index = i;
     }
@@ -1044,7 +1059,7 @@ fn get_artist_tracks(artist: String, tracks: Vec<String>) -> Result<Vec<TrackInf
 }
 
 #[tauri::command]
-fn play_track(index: usize, skip_secs: Option<u64>, state: State<AppState>) -> Result<TrackInfo, String> {
+fn play_track(index: usize, skip_secs: Option<f64>, state: State<AppState>) -> Result<TrackInfo, String> {
     let playlist = state.playlist.lock().unwrap();
     
     if index >= playlist.len() {
@@ -1058,7 +1073,7 @@ fn play_track(index: usize, skip_secs: Option<u64>, state: State<AppState>) -> R
     *state.current_duration.lock().unwrap() = duration;
     
     let volume = *state.volume.lock().unwrap();
-    let skip = skip_secs.unwrap_or(0);
+    let skip = skip_secs.unwrap_or(0.0).max(0.0);
     state.player.send(AudioCommand::Play(path.clone(), volume, skip));
     
     *state.current_index.lock().unwrap() = index;
@@ -1135,7 +1150,7 @@ fn next_track(state: State<AppState>) -> Result<TrackInfo, String> {
     *state.current_duration.lock().unwrap() = duration;
     
     let volume = *state.volume.lock().unwrap();
-    state.player.send(AudioCommand::Play(path.clone(), volume, 0));
+    state.player.send(AudioCommand::Play(path.clone(), volume, 0.0));
     
     *state.current_index.lock().unwrap() = next_index;
     *state.is_playing.lock().unwrap() = true;
@@ -1178,7 +1193,7 @@ fn prev_track(state: State<AppState>) -> Result<TrackInfo, String> {
     *state.current_duration.lock().unwrap() = duration;
     
     let volume = *state.volume.lock().unwrap();
-    state.player.send(AudioCommand::Play(path.clone(), volume, 0));
+    state.player.send(AudioCommand::Play(path.clone(), volume, 0.0));
     
     *state.current_index.lock().unwrap() = prev_index;
     *state.is_playing.lock().unwrap() = true;
@@ -1235,34 +1250,32 @@ fn get_status(state: State<AppState>) -> PlayerStatus {
 }
 
 #[tauri::command]
-fn seek(position: u64, state: State<AppState>) -> Result<u64, String> {
+fn clamp_position(position: f64, state: &AppState) -> f64 {
+    let max_pos = state.current_duration.lock().unwrap().map_or(f64::MAX, |d| d as f64);
+    position.max(0.0).min(max_pos)
+}
+
+#[tauri::command]
+fn seek(position: f64, state: State<AppState>) -> Result<f64, String> {
     let is_playing = *state.is_playing.lock().unwrap();
     if !is_playing {
         return Err("No track is playing".to_string());
     }
     
-    let duration = state.current_duration.lock().unwrap();
-    let max_pos = duration.unwrap_or(u64::MAX);
-    let clamped = position.min(max_pos);
-    
-    state.player.send(AudioCommand::Seek(clamped));
+    let clamped = clamp_position(position, &state);
+    state.player.seek(clamped);
     Ok(clamped)
 }
 
 #[tauri::command]
-fn seek_relative(delta: i64, state: State<AppState>) -> Result<u64, String> {
+fn seek_relative(delta: f64, state: State<AppState>) -> Result<f64, String> {
     let is_playing = *state.is_playing.lock().unwrap();
     if !is_playing {
         return Err("No track is playing".to_string());
     }
     
-    let current = state.player.get_elapsed() as i64;
-    let duration = state.current_duration.lock().unwrap();
-    let max_pos = duration.map(|d| d as i64).unwrap_or(i64::MAX);
-    
-    let new_pos = (current + delta).max(0).min(max_pos) as u64;
-    
-    state.player.send(AudioCommand::Seek(new_pos));
+    let new_pos = clamp_position(state.player.get_elapsed() + delta, &state);
+    state.player.seek(new_pos);
     Ok(new_pos)
 }
 
@@ -1572,35 +1585,245 @@ fn get_custom_theme() -> Result<String, String> {
     }
 }
 
-fn load_cues() -> std::collections::HashMap<String, Vec<u64>> {
-    get_config_dir()
-        .and_then(|dir| fs::read_to_string(dir.join("cues.json")).ok())
-        .and_then(|content| serde_json::from_str(&content).ok())
-        .unwrap_or_default()
+const CUES_FILE: &str = "cues.json";
+const BOOKMARKS_FILE: &str = "bookmarks.json";
+// Cues closer than this (seconds) are considered duplicates
+const CUE_DEDUP_SECS: f64 = 0.05;
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(from = "StoredCue")]
+struct Cue {
+    time: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    label: Option<String>,
+}
+
+// Accepts both the legacy format (plain seconds) and `{ time, label }`
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum StoredCue {
+    Time(f64),
+    Full { time: f64, #[serde(default)] label: Option<String> },
+}
+
+impl From<StoredCue> for Cue {
+    fn from(stored: StoredCue) -> Self {
+        match stored {
+            StoredCue::Time(time) => Cue { time, label: None },
+            StoredCue::Full { time, label } => Cue { time, label },
+        }
+    }
+}
+
+type CueMap = HashMap<String, Vec<Cue>>;
+
+// Sort, drop invalid/duplicate cues and empty labels
+fn normalize_cues(mut cues: Vec<Cue>) -> Vec<Cue> {
+    cues.retain(|c| c.time.is_finite() && c.time >= 0.0);
+    for cue in &mut cues {
+        cue.label = cue.label.take().map(|l| l.trim().to_string()).filter(|l| !l.is_empty());
+    }
+    cues.sort_by(|a, b| a.time.total_cmp(&b.time));
+    cues.dedup_by(|b, a| (b.time - a.time).abs() < CUE_DEDUP_SECS);
+    cues
 }
 
 #[tauri::command]
-fn get_cues() -> std::collections::HashMap<String, Vec<u64>> {
-    load_cues()
+fn get_cues() -> CueMap {
+    read_json(CUES_FILE)
 }
 
 #[tauri::command]
-fn set_track_cues(path: String, mut cues: Vec<u64>) -> Result<(), String> {
-    let config_dir = get_config_dir().ok_or("Could not determine config directory")?;
-    fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
-    
-    let mut all = load_cues();
-    cues.sort_unstable();
-    cues.dedup();
+fn set_track_cues(path: String, cues: Vec<Cue>) -> Result<Vec<Cue>, String> {
+    let mut all: CueMap = read_json(CUES_FILE);
+    let cues = normalize_cues(cues);
     if cues.is_empty() {
         all.remove(&path);
     } else {
-        all.insert(path, cues);
+        all.insert(path, cues.clone());
+    }
+    write_json(CUES_FILE, &all)?;
+    Ok(cues)
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+struct Bookmark {
+    track: String,
+    position: f64,
+}
+
+#[tauri::command]
+fn get_bookmarks() -> HashMap<String, Bookmark> {
+    read_json(BOOKMARKS_FILE)
+}
+
+#[tauri::command]
+fn save_bookmarks(bookmarks: HashMap<String, Bookmark>) -> Result<(), String> {
+    write_json(BOOKMARKS_FILE, &bookmarks)
+}
+
+#[derive(Serialize)]
+struct PruneResult {
+    cues: usize,
+    bookmarks: usize,
+    metadata: usize,
+}
+
+// Remove cues, bookmarks and cached metadata that refer to files that no longer exist
+#[tauri::command]
+fn prune_missing(state: State<AppState>) -> Result<PruneResult, String> {
+    let exists = |path: &String| Path::new(path).is_file();
+    
+    let mut cues: CueMap = read_json(CUES_FILE);
+    let cues_before = cues.len();
+    cues.retain(|path, _| exists(path));
+    
+    let mut bookmarks: HashMap<String, Bookmark> = read_json(BOOKMARKS_FILE);
+    let bookmarks_before = bookmarks.len();
+    bookmarks.retain(|_, b| exists(&b.track));
+    
+    let result = PruneResult {
+        cues: cues_before - cues.len(),
+        bookmarks: bookmarks_before - bookmarks.len(),
+        metadata: state.with_metadata_cache(|cache| {
+            let before = cache.len();
+            cache.retain(|path, _| exists(path));
+            before - cache.len()
+        }),
+    };
+    
+    if result.cues > 0 {
+        write_json(CUES_FILE, &cues)?;
+    }
+    if result.bookmarks > 0 {
+        write_json(BOOKMARKS_FILE, &bookmarks)?;
+    }
+    if result.metadata > 0 {
+        state.with_metadata_cache(|cache| save_metadata_cache(cache))?;
+    }
+    Ok(result)
+}
+
+// CUE sheet support (INDEX times are mm:ss:ff with 75 frames per second)
+const CUE_FRAMES_PER_SEC: u64 = 75;
+
+fn format_cue_time(secs: f64) -> String {
+    let frames = (secs.max(0.0) * CUE_FRAMES_PER_SEC as f64).round() as u64;
+    let total_secs = frames / CUE_FRAMES_PER_SEC;
+    format!("{:02}:{:02}:{:02}", total_secs / 60, total_secs % 60, frames % CUE_FRAMES_PER_SEC)
+}
+
+fn parse_cue_time(text: &str) -> Option<f64> {
+    let parts: Vec<u64> = text.split(':').map(|p| p.trim().parse().ok()).collect::<Option<_>>()?;
+    match parts[..] {
+        [m, s, f] if s < 60 && f < CUE_FRAMES_PER_SEC => {
+            Some((m * 60 + s) as f64 + f as f64 / CUE_FRAMES_PER_SEC as f64)
+        }
+        _ => None,
+    }
+}
+
+// CUE sheets have no escaping for quotes inside strings
+fn cue_quote(text: &str) -> String {
+    format!("\"{}\"", text.replace('"', "'"))
+}
+
+// Value of a CUE command argument: quoted string, or first whitespace-separated token
+fn cue_arg(rest: &str) -> String {
+    let rest = rest.trim();
+    match rest.strip_prefix('"') {
+        Some(quoted) => quoted.split('"').next().unwrap_or_default().to_string(),
+        None => rest.split_whitespace().next().unwrap_or_default().to_string(),
+    }
+}
+
+fn build_cue_sheet(audio_path: &str, title: &str, cues: &[Cue]) -> String {
+    let path = Path::new(audio_path);
+    let file_name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+    let file_type = match ext.as_str() {
+        "mp3" => "MP3",
+        "aif" | "aiff" => "AIFF",
+        _ => "WAVE",
+    };
+    
+    let mut out = format!("TITLE {}\nFILE {} {}\n", cue_quote(title), cue_quote(&file_name), file_type);
+    for (i, cue) in cues.iter().enumerate() {
+        out.push_str(&format!("  TRACK {:02} AUDIO\n", i + 1));
+        if let Some(label) = &cue.label {
+            out.push_str(&format!("    TITLE {}\n", cue_quote(label)));
+        }
+        out.push_str(&format!("    INDEX 01 {}\n", format_cue_time(cue.time)));
+    }
+    out
+}
+
+// Extract cues for `audio_file_name` from a CUE sheet. If the sheet references a single
+// file, its tracks are used regardless of the file name.
+fn parse_cue_sheet(content: &str, audio_file_name: &str) -> Result<Vec<Cue>, String> {
+    // (FILE name, cues); a TRACK's time stays None until its INDEX 01 is found
+    let mut files: Vec<(String, Vec<Cue>)> = Vec::new();
+    let mut pending: Option<(Option<f64>, Option<String>)> = None;
+    
+    fn flush(pending: &mut Option<(Option<f64>, Option<String>)>, files: &mut [(String, Vec<Cue>)]) {
+        if let (Some((Some(time), label)), Some((_, cues))) = (pending.take(), files.last_mut()) {
+            cues.push(Cue { time, label });
+        }
     }
     
-    let content = serde_json::to_string_pretty(&all).map_err(|e| e.to_string())?;
-    fs::write(config_dir.join("cues.json"), content).map_err(|e| e.to_string())?;
-    Ok(())
+    for line in content.lines() {
+        let line = line.trim_start_matches('\u{feff}').trim();
+        let (keyword, rest) = line.split_once(char::is_whitespace).unwrap_or((line, ""));
+        match keyword.to_ascii_uppercase().as_str() {
+            "FILE" => {
+                flush(&mut pending, &mut files);
+                files.push((cue_arg(rest), Vec::new()));
+            }
+            "TRACK" if !files.is_empty() => {
+                flush(&mut pending, &mut files);
+                pending = Some((None, None));
+            }
+            "TITLE" => {
+                if let Some((_, label)) = pending.as_mut() {
+                    *label = Some(cue_arg(rest));
+                }
+            }
+            "INDEX" => {
+                let mut args = rest.split_whitespace();
+                if let (Some("01"), Some(text), Some((time, _))) = (args.next(), args.next(), pending.as_mut()) {
+                    *time = Some(parse_cue_time(text).ok_or_else(|| format!("Invalid INDEX time: {}", text))?);
+                }
+            }
+            _ => {}
+        }
+    }
+    flush(&mut pending, &mut files);
+    
+    let file_matches = |name: &str| {
+        Path::new(name).file_name().map_or(false, |n| n.to_string_lossy().eq_ignore_ascii_case(audio_file_name))
+    };
+    let cues = match files.iter().position(|(name, _)| file_matches(name)) {
+        Some(i) => files.swap_remove(i).1,
+        None if files.len() == 1 => files.remove(0).1,
+        None if files.is_empty() => return Err("No FILE entries in CUE sheet".to_string()),
+        None => return Err(format!("CUE sheet does not reference {}", audio_file_name)),
+    };
+    Ok(normalize_cues(cues))
+}
+
+#[tauri::command]
+fn export_cue_sheet(audio_path: String, cue_path: String, title: String, cues: Vec<Cue>, overwrite: bool) -> Result<(), String> {
+    if !overwrite && Path::new(&cue_path).exists() {
+        return Err(format!("{} already exists (use :cue export! to overwrite)", cue_path));
+    }
+    fs::write(&cue_path, build_cue_sheet(&audio_path, &title, &cues)).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn import_cue_sheet(audio_path: String, cue_path: String) -> Result<Vec<Cue>, String> {
+    let bytes = fs::read(&cue_path).map_err(|e| e.to_string())?;
+    let audio_file_name = Path::new(&audio_path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    parse_cue_sheet(&String::from_utf8_lossy(&bytes), &audio_file_name)
 }
 
 // Library folder management
@@ -1773,6 +1996,11 @@ fn main() {
             get_custom_theme,
             get_cues,
             set_track_cues,
+            get_bookmarks,
+            save_bookmarks,
+            prune_missing,
+            export_cue_sheet,
+            import_cue_sheet,
             get_library_folders,
             add_library_folder,
             remove_library_folder,
@@ -1857,7 +2085,7 @@ fn main() {
                             MediaControlEvent::SetPosition(MediaPosition(position)) => {
                                 let _ = app_handle.emit_all("media-control", MediaControlPayload {
                                     action: "setPosition".to_string(),
-                                    position: Some(position.as_secs()),
+                                    position: Some(position.as_secs_f64()),
                                     delta: None,
                                 });
                             }
@@ -1898,4 +2126,67 @@ fn main() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cue(time: f64, label: Option<&str>) -> Cue {
+        Cue { time, label: label.map(String::from) }
+    }
+
+    #[test]
+    fn cue_time_roundtrip() {
+        assert_eq!(format_cue_time(0.0), "00:00:00");
+        assert_eq!(format_cue_time(83.5), "01:23:38");
+        assert_eq!(format_cue_time(6000.0), "100:00:00");
+        assert_eq!(parse_cue_time("01:23:38"), Some(83.0 + 38.0 / 75.0));
+        assert_eq!(parse_cue_time("01:60:00"), None);
+        assert_eq!(parse_cue_time("01:00:75"), None);
+        assert_eq!(parse_cue_time("1:00"), None);
+    }
+
+    #[test]
+    fn legacy_and_labeled_cues_deserialize() {
+        let map: CueMap = serde_json::from_str(r#"{"a.mp3": [10, 20.5, {"time": 30, "label": "Drop"}]}"#).unwrap();
+        assert_eq!(map["a.mp3"], vec![cue(10.0, None), cue(20.5, None), cue(30.0, Some("Drop"))]);
+        let json = serde_json::to_string(&map["a.mp3"]).unwrap();
+        assert_eq!(json, r#"[{"time":10.0},{"time":20.5},{"time":30.0,"label":"Drop"}]"#);
+    }
+
+    #[test]
+    fn normalize_sorts_dedups_and_trims() {
+        let cues = normalize_cues(vec![
+            cue(30.0, Some("  ")),
+            cue(10.0, Some(" Intro ")),
+            cue(10.01, None),
+            cue(-1.0, None),
+        ]);
+        assert_eq!(cues, vec![cue(10.0, Some("Intro")), cue(30.0, None)]);
+    }
+
+    #[test]
+    fn cue_sheet_roundtrip() {
+        let cues = vec![cue(0.0, Some("Intro")), cue(83.0, None), cue(120.4, Some("Say \"hi\""))];
+        let sheet = build_cue_sheet(r"C:\music\Song.mp3", "Song", &cues);
+        assert!(sheet.contains("FILE \"Song.mp3\" MP3"));
+        let parsed = parse_cue_sheet(&sheet, "song.MP3").unwrap();
+        assert_eq!(parsed.len(), 3);
+        assert_eq!(parsed[0], cue(0.0, Some("Intro")));
+        assert_eq!(parsed[1], cue(83.0, None));
+        assert!((parsed[2].time - 120.4).abs() < 1.0 / 75.0);
+        assert_eq!(parsed[2].label.as_deref(), Some("Say 'hi'"));
+    }
+
+    #[test]
+    fn cue_sheet_picks_matching_file() {
+        let sheet = "\u{feff}PERFORMER \"X\"\nFILE \"a.flac\" WAVE\n  TRACK 01 AUDIO\n    INDEX 01 00:10:00\nFILE \"b.flac\" WAVE\n  TRACK 02 AUDIO\n    TITLE \"B1\"\n    INDEX 00 00:00:00\n    INDEX 01 00:05:00\n";
+        assert_eq!(parse_cue_sheet(sheet, "b.flac").unwrap(), vec![cue(5.0, Some("B1"))]);
+        assert_eq!(parse_cue_sheet(sheet, "a.flac").unwrap(), vec![cue(10.0, None)]);
+        assert!(parse_cue_sheet(sheet, "c.flac").is_err());
+        // Single-file sheets apply even if the file name differs
+        let single = "FILE \"old name.wav\" WAVE\n  TRACK 01 AUDIO\n    INDEX 01 00:01:00\n";
+        assert_eq!(parse_cue_sheet(single, "new.wav").unwrap(), vec![cue(1.0, None)]);
+    }
 }
