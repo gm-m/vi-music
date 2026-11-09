@@ -64,6 +64,25 @@ export function updateProgressDisplay() {
     } else {
         elements.progressFill.style.width = '0%';
     }
+    updateCueMarkers();
+}
+
+function updateCueMarkers() {
+    if (!elements.cueMarkers) return;
+    const path = state.isPlaying ? state.playlist[state.playingIndex]?.path : null;
+    const cues = (path && state.cues[path]) || [];
+    const duration = state.duration > 0 ? state.duration : null;
+    const key = duration ? `${path}|${duration}|${cues.join(',')}` : '';
+    if (key === state.cueMarkersKey) return;
+    state.cueMarkersKey = key;
+    
+    elements.cueMarkers.replaceChildren(...(duration ? cues : []).map((cue, i) => {
+        const marker = document.createElement('div');
+        marker.className = 'cue-marker';
+        marker.style.left = `${Math.min((cue / duration) * 100, 100)}%`;
+        marker.title = `Cue ${i + 1} @ ${formatDuration(cue)}`;
+        return marker;
+    }));
 }
 
 export function resetProgressDisplay() {
@@ -75,6 +94,7 @@ export function resetProgressDisplay() {
         elements.timeTotal.textContent = formatDuration(state.duration);
     }
     elements.progressFill.style.width = '0%';
+    updateCueMarkers();
 }
 
 export function showLoading(text = 'Loading...') {

@@ -58,6 +58,9 @@ export const state = {
     sleepTimerInterval: null,
     // Bookmarks: { 'a': { track: 'path', position: seconds }, ... }
     bookmarks: {},
+    // Cue points per track (persisted): { 'path': [seconds, ...] } sorted ascending
+    cues: {},
+    cueMarkersKey: null, // Cache key to avoid re-rendering cue markers every tick
     // A-B Loop
     loopA: null, // Start position in seconds
     loopB: null, // End position in seconds
@@ -107,6 +110,7 @@ export const elements = {
     helpModal: document.getElementById('helpModal'),
     progressBar: document.getElementById('progressBar'),
     progressFill: document.getElementById('progressFill'),
+    cueMarkers: document.getElementById('cueMarkers'),
     timeElapsed: document.getElementById('timeElapsed'),
     timeTotal: document.getElementById('timeTotal'),
     queueModal: document.getElementById('queueModal'),

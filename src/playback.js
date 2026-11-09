@@ -204,6 +204,7 @@ export async function seekTo(position) {
             state.elapsed = newPos;
             updateProgressDisplay();
         }
+        return newPos;
     } catch (err) {
         console.error('seek failed:', err);
     }

@@ -85,6 +85,15 @@ A minimal, VIM-style music player built with Tauri and vanilla JavaScript.
 | `m` + `a-z` | Set bookmark at current position |
 | `'` + `a-z` | Jump to bookmark |
 
+### Cues
+Per-track cue points, persisted in `cues.json` in the config directory and shown as markers on the progress bar.
+
+| Key | Action |
+|-----|--------|
+| `}` | Jump to next cue |
+| `{` | Jump to previous cue (within 2s of a cue, goes to the one before) |
+| `[n]}` / `[n]{` | Skip n cues forward/backward |
+
 ### Track Editing
 | Key | Action |
 |-----|--------|
@@ -245,6 +254,10 @@ Press `Tab` in command mode to autocomplete command names. Use `Up` and `Down` t
 - `:mark <a-z>` - Set bookmark at current position
 - `:marks` - Show all bookmarks
 - `:delmark <a-z>` - Delete a bookmark
+- `:cue add [m:ss]` - Add a cue to the playing track (default: current position)
+- `:cue del [n]` - Delete cue n (default: cue nearest to current position)
+- `:cue list` or `:cues` - List cues of the playing track
+- `:cue clear` - Remove all cues from the playing track
 - `:<line>d` - Delete track at line number (e.g., `:5d`)
 - `:<start>,<end>d` - Delete range of tracks (e.g., `:10,20d`)
 - `:set <option>` - Enable a setting (e.g., `:set relativenumber`)

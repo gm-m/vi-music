@@ -83,6 +83,9 @@ const defaultKeybindings = {
     'b': 'setLoopA',
     'B': 'setLoopB',
     'C': 'clearLoop',
+    // Cues
+    '}': 'nextCue',
+    '{': 'prevCue',
 };
 
 // User keybindings (loaded from config)

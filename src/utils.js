@@ -24,3 +24,10 @@ export function formatDuration(seconds) {
     const secs = seconds % 60;
     return `${mins}:${String(secs).padStart(2, '0')}`;
 }
+
+// Parse "s", "m:ss" or "h:mm:ss" into seconds; returns null if invalid
+export function parseTime(text) {
+    const parts = text.split(':').map(p => (/^\d+$/.test(p) ? Number(p) : NaN));
+    if (parts.length > 3 || parts.some(isNaN)) return null;
+    return parts.reduce((total, p) => total * 60 + p, 0);
+}

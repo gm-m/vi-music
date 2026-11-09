@@ -82,6 +82,7 @@
                     <span class="time-elapsed" id="timeElapsed">0:00</span>
                     <div class="progress-bar" id="progressBar">
                         <div class="progress-fill" id="progressFill"></div>
+                        <div class="cue-markers" id="cueMarkers"></div>
                     </div>
                     <span class="time-total" id="timeTotal">0:00</span>
                 </div>
@@ -189,6 +190,12 @@
                         <h3>Bookmarks</h3>
                         <div class="shortcut"><kbd>m</kbd>+<kbd>a-z</kbd> Set bookmark</div>
                         <div class="shortcut"><kbd>'</kbd>+<kbd>a-z</kbd> Jump to bookmark</div>
+                    </div>
+                    <div class="help-section">
+                        <h3>Cues</h3>
+                        <div class="shortcut"><kbd>}</kbd> Jump to next cue</div>
+                        <div class="shortcut"><kbd>{</kbd> Jump to previous cue</div>
+                        <div class="shortcut"><kbd>[n]</kbd><kbd>}</kbd> / <kbd>[n]</kbd><kbd>{</kbd> Skip n cues</div>
                     </div>
                     <div class="help-section">
                         <h3>Queue</h3>
@@ -308,6 +315,13 @@
                         <div class="shortcut"><kbd>:mark &lt;a-z&gt;</kbd> Set bookmark</div>
                         <div class="shortcut"><kbd>:marks</kbd> Show bookmarks</div>
                         <div class="shortcut"><kbd>:delmark &lt;a-z&gt;</kbd> Delete bookmark</div>
+                    </div>
+                    <div class="help-section">
+                        <h3>Cues (playing track)</h3>
+                        <div class="shortcut"><kbd>:cue add [m:ss]</kbd> Add cue (default: current position)</div>
+                        <div class="shortcut"><kbd>:cue del [n]</kbd> Delete cue n (default: nearest)</div>
+                        <div class="shortcut"><kbd>:cue list</kbd> / <kbd>:cues</kbd> List cues</div>
+                        <div class="shortcut"><kbd>:cue clear</kbd> Remove all cues</div>
                     </div>
                     <div class="help-section">
                         <h3>File Explorer</h3>

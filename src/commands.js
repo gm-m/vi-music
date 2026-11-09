@@ -11,7 +11,8 @@ import { getLibraryFolders, addLibraryFolder, removeLibraryFolder, scanLibrary, 
 import { showAudioDevices, setAudioDevice, setAudioDeviceByIndex } from './devices.js';
 import { savePlaylist, loadSavedPlaylist, renamePlaylist, deletePlaylist, showPlaylistManager } from './playlists.js';
 import { deleteTrackRange } from './visual.js';
-import { syncBackendPlaylist } from './utils.js';
+import { syncBackendPlaylist, parseTime } from './utils.js';
+import { addCue, deleteCue, clearCues, listCues } from './cues.js';
 import { invoke, open } from './tauri.js';
 import { getThemeNames } from './themes.js';
 
@@ -36,6 +37,8 @@ const COMMAND_COMPLETIONS = [
     'mark',
     'marks',
     'delmark', 'dm',
+    'cue',
+    'cues',
     'jump', 'j',
     'addlib', 'al',
     'libs', 'library',
@@ -381,6 +384,12 @@ export function executeCommand(cmd) {
                 updateStatus('Usage: :delmark <a-z>');
             }
             break;
+        case 'cue':
+            handleCueCommand(rawParts[1]?.toLowerCase(), rawParts[2]);
+            break;
+        case 'cues':
+            listCues();
+            break;
         case 'jump':
         case 'j':
             if (rawParts[1]) {
@@ -497,6 +506,49 @@ export function executeCommand(cmd) {
         const offset = parseInt(cmd);
         moveSelectionRelative(offset);
         return;
+    }
+}
+
+function handleCueCommand(sub, arg) {
+    switch (sub) {
+        case 'add':
+        case 'a': {
+            if (!arg) {
+                addCue();
+                break;
+            }
+            const seconds = parseTime(arg);
+            if (seconds === null) {
+                updateStatus('Invalid time format. Use s, m:ss or h:mm:ss');
+            } else {
+                addCue(seconds);
+            }
+            break;
+        }
+        case 'del':
+        case 'd': {
+            if (!arg) {
+                deleteCue();
+                break;
+            }
+            const number = parseInt(arg);
+            if (isNaN(number)) {
+                updateStatus('Usage: :cue del [n]');
+            } else {
+                deleteCue(number);
+            }
+            break;
+        }
+        case 'list':
+        case 'ls':
+        case undefined:
+            listCues();
+            break;
+        case 'clear':
+            clearCues();
+            break;
+        default:
+            updateStatus('Usage: :cue add [m:ss] | del [n] | list | clear');
     }
 }
 

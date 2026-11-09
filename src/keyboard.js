@@ -11,6 +11,7 @@ import { handlePlaylistManagerKeyDown, handleAddToPlaylistKeyDown, showPlaylistM
 import { handleArtistViewKeyDown } from './views/artist.js';
 import { toggleViewMode, openFolder, reloadContent, navigateFolderUp } from './views/folder.js';
 import { setBookmark, jumpToBookmark, setLoopA, setLoopB, clearLoop } from './features.js';
+import { jumpToNextCue, jumpToPrevCue } from './cues.js';
 import { formatDuration } from './utils.js';
 
 // Execute an action by name
@@ -28,6 +29,7 @@ export function executeAction(action, e) {
         'volumeUp', 'volumeDown', 'speedUp', 'speedDown',
         'deleteTrack', 'deleteToEnd', 'moveTrackDown', 'moveTrackUp',
         'nextTrack', 'prevTrack', 'findNextArtist', 'findPrevArtist',
+        'nextCue', 'prevCue',
     ];
     if (repeatableActions.includes(action)) {
         state.lastAction = { action, count };
@@ -155,6 +157,10 @@ export function executeAction(action, e) {
         case 'setLoopA': clearCount(); setLoopA(); return true;
         case 'setLoopB': clearCount(); setLoopB(); return true;
         case 'clearLoop': clearCount(); clearLoop(); return true;
+        
+        // Cues (with count support)
+        case 'nextCue': jumpToNextCue(count); clearCount(); return true;
+        case 'prevCue': jumpToPrevCue(count); clearCount(); return true;
         
         default: clearCount(); return false;
     }

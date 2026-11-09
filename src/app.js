@@ -11,11 +11,13 @@ import { handleKeyDown } from './keyboard.js';
 import { handleCommandInput, exitCommandMode } from './commands.js';
 import { handleFilterInput, handleFilterKeydown, exitFilterMode } from './filter.js';
 import { loadFolder } from './views/folder.js';
+import { loadCues } from './cues.js';
 
 // Initialize
 async function init() {
     await loadKeybindings();
     await loadSettings();
+    await loadCues();
     updateVolumeDisplay();
     setupEventListeners();
     setupMediaControlListener(listen);

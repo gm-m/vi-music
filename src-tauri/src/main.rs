@@ -1572,6 +1572,37 @@ fn get_custom_theme() -> Result<String, String> {
     }
 }
 
+fn load_cues() -> std::collections::HashMap<String, Vec<u64>> {
+    get_config_dir()
+        .and_then(|dir| fs::read_to_string(dir.join("cues.json")).ok())
+        .and_then(|content| serde_json::from_str(&content).ok())
+        .unwrap_or_default()
+}
+
+#[tauri::command]
+fn get_cues() -> std::collections::HashMap<String, Vec<u64>> {
+    load_cues()
+}
+
+#[tauri::command]
+fn set_track_cues(path: String, mut cues: Vec<u64>) -> Result<(), String> {
+    let config_dir = get_config_dir().ok_or("Could not determine config directory")?;
+    fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
+    
+    let mut all = load_cues();
+    cues.sort_unstable();
+    cues.dedup();
+    if cues.is_empty() {
+        all.remove(&path);
+    } else {
+        all.insert(path, cues);
+    }
+    
+    let content = serde_json::to_string_pretty(&all).map_err(|e| e.to_string())?;
+    fs::write(config_dir.join("cues.json"), content).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 // Library folder management
 #[tauri::command]
 fn get_library_folders() -> Result<Vec<String>, String> {
@@ -1740,6 +1771,8 @@ fn main() {
             get_settings,
             save_settings,
             get_custom_theme,
+            get_cues,
+            set_track_cues,
             get_library_folders,
             add_library_folder,
             remove_library_folder,

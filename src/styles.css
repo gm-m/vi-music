@@ -327,6 +327,7 @@ body {
 }
 
 .progress-bar {
+    position: relative;
     flex: 1;
     height: 4px;
     background: var(--bg-tertiary);
@@ -344,6 +345,21 @@ body {
     width: 0%;
     background: var(--accent);
     transition: width 0.1s linear;
+}
+
+.cue-markers {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.cue-marker {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    margin-left: -1px;
+    background: var(--warning);
 }
 
 .volume-section {
