@@ -22,7 +22,6 @@ export const state = {
     elapsed: 0, // Seconds (fractional) at the last sync with the backend
     elapsedSyncedAt: 0, // performance.now() when elapsed was last synced
     duration: null,
-    progressInterval: null,
     repeatMode: 'off', // 'off' | 'one' | 'all'
     shuffleMode: false,
     shuffleHistory: [],

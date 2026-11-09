@@ -6,7 +6,7 @@ import { state, elements } from './state.js';
 import { updateVolumeDisplay, setupHelpTabs } from './ui.js';
 import { loadKeybindings } from './keybindings.js';
 import { loadSettings } from './settings.js';
-import { refreshStatus, startProgressUpdater, setupMediaControlListener, togglePause, prevTrack, nextTrack, stop, seekTo, setVolume } from './playback.js';
+import { refreshStatus, setupStatusListener, setupMediaControlListener, togglePause, prevTrack, nextTrack, stop, seekTo, setVolume } from './playback.js';
 import { handleKeyDown } from './keyboard.js';
 import { handleCommandInput, exitCommandMode } from './commands.js';
 import { handleFilterInput, handleFilterKeydown, exitFilterMode } from './filter.js';
@@ -24,7 +24,7 @@ async function init() {
     setupMediaControlListener(listen);
     setupHelpTabs();
     await refreshStatus();
-    startProgressUpdater();
+    await setupStatusListener(listen);
     await loadDefaultFolder();
 }
 

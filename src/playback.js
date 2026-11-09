@@ -22,7 +22,7 @@ export function setElapsed(position) {
     state.elapsedSyncedAt = performance.now();
 }
 
-// Current position estimated from the last backend sync (status is only polled every 500ms)
+// Current position estimated from the last backend sync (status is pushed every 250ms while playing)
 export function getElapsed() {
     if (!state.isPlaying || state.isPaused) return state.elapsed;
     const estimate = state.elapsed + ((performance.now() - state.elapsedSyncedAt) / 1000) * state.speed;
@@ -352,39 +352,30 @@ export function playPrevShuffle() {
     playTrack(state.shuffleHistory[state.shuffleIndex]);
 }
 
-// Progress Bar
-export function startProgressUpdater() {
-    if (state.progressInterval) {
-        clearInterval(state.progressInterval);
-    }
-    state.progressInterval = setInterval(updateProgress, 500);
-}
-
-export async function updateProgress() {
-    if (!state.isPlaying) {
-        return;
+// Progress: the backend pushes `player-status` on changes (and every 250ms while playing)
+// and `track-finished` once when a track ends
+function applyStatus(status) {
+    if (!state.isPlaying) return;
+    
+    setElapsed(status.elapsed);
+    state.duration = status.duration;
+    
+    // Sync speed from backend
+    if (status.speed !== state.speed) {
+        state.speed = status.speed;
+        updateSpeedDisplay();
     }
     
-    try {
-        const status = await invoke('get_status');
-        setElapsed(status.elapsed);
-        state.duration = status.duration;
-        
-        // Sync speed from backend
-        if (status.speed !== state.speed) {
-            state.speed = status.speed;
-            updateSpeedDisplay();
-        }
-        
-        // Check if track finished
-        if (status.is_finished) {
-            handleTrackEnd();
-        }
-        
-        updateProgressDisplay();
-    } catch (err) {
-        // Ignore errors
-    }
+    updateProgressDisplay();
+}
+
+export async function setupStatusListener(listen) {
+    if (!listen) return;
+    
+    await listen('player-status', (event) => applyStatus(event.payload));
+    await listen('track-finished', () => {
+        if (state.isPlaying) handleTrackEnd();
+    });
 }
 
 // A-B Loop monitor
