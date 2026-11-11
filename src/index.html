@@ -14,6 +14,7 @@
                 <span class="loop-indicator" id="loopIndicator"></span>
                 <span class="sleep-timer-indicator" id="sleepTimerIndicator"></span>
                 <span class="speed-indicator" id="speedIndicator"></span>
+                <span class="showcmd" id="showcmd"></span>
                 <div class="mode-indicator" id="modeIndicator">NORMAL</div>
             </div>
         </header>
@@ -81,8 +82,12 @@
                 <div class="progress-section">
                     <span class="time-elapsed" id="timeElapsed">0:00</span>
                     <div class="progress-bar" id="progressBar">
-                        <div class="progress-fill" id="progressFill"></div>
+                        <div class="progress-track">
+                            <div class="progress-fill" id="progressFill"></div>
+                            <div class="loop-range" id="loopRange"></div>
+                        </div>
                         <div class="cue-markers" id="cueMarkers"></div>
+                        <div class="progress-tooltip" id="progressTooltip"></div>
                     </div>
                     <span class="time-total" id="timeTotal">0:00</span>
                 </div>
@@ -99,7 +104,8 @@
             </div>
         </div>
 
-        <footer class="footer">
+        <footer class="footer" id="footer">
+            <div class="message-line" id="messageLine"></div>
             <div class="help-bar" id="helpBar">
                 <span><kbd>j</kbd>/<kbd>k</kbd> navigate</span>
                 <span><kbd>Enter</kbd> play</span>
@@ -241,6 +247,13 @@
                         <div class="shortcut"><kbd>/</kbd> Filter tracks</div>
                         <div class="shortcut"><kbd>:</kbd> Command mode</div>
                         <div class="shortcut"><kbd>?</kbd> Toggle help</div>
+                        <div class="shortcut">Pending keys/counts appear next to the mode; a hint popup lists continuations</div>
+                    </div>
+                    <div class="help-section">
+                        <h3>Progress Bar (mouse)</h3>
+                        <div class="shortcut">Click or drag to seek; hover shows the time</div>
+                        <div class="shortcut">Click a cue marker to jump to it</div>
+                        <div class="shortcut">The A-B loop is highlighted on the bar</div>
                     </div>
                     <div class="help-section">
                         <h3>Playlists</h3>
@@ -355,6 +368,7 @@
                         <div class="shortcut"><kbd>:set cp</kbd> Keep position when changing tracks</div>
                         <div class="shortcut"><kbd>:set rt</kbd> Show remaining time (countdown)</div>
                         <div class="shortcut"><kbd>:set nort</kbd> Show elapsed time (default)</div>
+                        <div class="shortcut"><kbd>:set notags</kbd> Show file names instead of title/artist tags</div>
                         <div class="shortcut"><kbd>:set</kbd> Show all settings</div>
                     </div>
                     <div class="help-section">
@@ -366,6 +380,7 @@
                     <div class="help-section">
                         <h3>General</h3>
                         <div class="shortcut"><kbd>Tab</kbd> Autocomplete command names</div>
+                        <div class="shortcut"><kbd>:messages</kbd> / <kbd>:mes</kbd> Message history (<kbd>:mes clear</kbd> clears)</div>
                         <div class="shortcut"><kbd>:help</kbd> Show help</div>
                         <div class="shortcut"><kbd>:quit</kbd> Quit app</div>
                     </div>
@@ -375,6 +390,16 @@
             <p class="help-footer">Press <kbd>Esc</kbd> or <kbd>?</kbd> to close</p>
         </div>
     </div>
+
+    <div class="output-modal" id="outputModal">
+        <div class="output-content">
+            <h2 id="outputTitle"></h2>
+            <div class="output-body" id="outputBody"></div>
+            <p class="output-footer"><kbd>j</kbd>/<kbd>k</kbd> scroll · <kbd>g</kbd>/<kbd>G</kbd> top/bottom · <kbd>q</kbd> / <kbd>Esc</kbd> close</p>
+        </div>
+    </div>
+
+    <div class="key-hints" id="keyHints"></div>
 
     <div class="queue-modal" id="queueModal">
         <div class="queue-content">

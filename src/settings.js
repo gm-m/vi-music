@@ -1,6 +1,6 @@
 import { invoke } from './tauri.js';
 import { state } from './state.js';
-import { updateStatus, updateProgressDisplay } from './ui.js';
+import { updateStatus, updateProgressDisplay, refreshNowPlaying, showOutput } from './ui.js';
 import { renderCurrentView } from './filter.js';
 import { applyTheme } from './themes.js';
 
@@ -29,6 +29,12 @@ export async function saveSettings() {
     }
 }
 
+function refreshViews() {
+    renderCurrentView();
+    updateProgressDisplay();
+    refreshNowPlaying();
+}
+
 export async function handleSetCommand(arg) {
     const trimmed = arg.trim();
     
@@ -44,6 +50,7 @@ export async function handleSetCommand(arg) {
         'cp': 'carryposition',
         'rt': 'remainingtime',
         'th': 'theme',
+        'tg': 'tags',
     };
     
     // Handle "no" prefix to disable (e.g., "norelativenumber")
@@ -53,8 +60,7 @@ export async function handleSetCommand(arg) {
         if (resolved in state.settings && typeof state.settings[resolved] === 'boolean') {
             state.settings[resolved] = false;
             saveSettings();
-            renderCurrentView();
-            updateProgressDisplay();
+            refreshViews();
             updateStatus(`${resolved} disabled`);
             return;
         }
@@ -67,8 +73,7 @@ export async function handleSetCommand(arg) {
         if (resolved in state.settings && typeof state.settings[resolved] === 'boolean') {
             state.settings[resolved] = !state.settings[resolved];
             saveSettings();
-            renderCurrentView();
-            updateProgressDisplay();
+            refreshViews();
             updateStatus(`${resolved} ${state.settings[resolved] ? 'enabled' : 'disabled'}`);
             return;
         }
@@ -114,7 +119,7 @@ export async function handleSetCommand(arg) {
                 state.settings[resolvedSetting] = value;
             }
             saveSettings();
-            renderCurrentView();
+            refreshViews();
             updateStatus(`${resolvedSetting}=${state.settings[resolvedSetting]}`);
             return;
         }
@@ -126,8 +131,7 @@ export async function handleSetCommand(arg) {
         if (typeof state.settings[resolvedName] === 'boolean') {
             state.settings[resolvedName] = true;
             saveSettings();
-            renderCurrentView();
-            updateProgressDisplay();
+            refreshViews();
             updateStatus(`${resolvedName} enabled`);
         } else {
             updateStatus(`${resolvedName}=${state.settings[resolvedName]} (use :set ${resolvedName}=<value> to change)`);
@@ -139,8 +143,5 @@ export async function handleSetCommand(arg) {
 }
 
 export function showCurrentSettings() {
-    const settings = Object.entries(state.settings)
-        .map(([k, v]) => `${k}=${v}`)
-        .join(', ');
-    updateStatus(`Settings: ${settings}`);
+    showOutput('Settings', Object.entries(state.settings).map(([k, v]) => `${k}=${v}`));
 }

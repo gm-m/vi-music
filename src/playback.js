@@ -5,6 +5,7 @@ import { scrollToSelected } from './navigation.js';
 import { renderPlaylist } from './views/playlist.js';
 import { handleFolderItemAction, renderFolderView } from './views/folder.js';
 import { updateQueueDisplay, dequeueNextIndex } from './queue.js';
+import { trackLabel, requestTrackTags } from './tags.js';
 
 // View-aware render: re-renders whichever view is currently active
 function renderCurrentView() {
@@ -74,7 +75,9 @@ export async function playTrack(index, seekPosition = null, allowCarryPosition =
         state.isPaused = false;
         state.duration = result.duration;
         setElapsed(startPosition);
-        updateNowPlaying(result.name);
+        const track = state.playlist[index];
+        updateNowPlaying(track ? trackLabel(track) : result.name);
+        if (track) requestTrackTags([track.path]);
         renderCurrentView();
         updatePlayButton();
         updateProgressDisplay();
@@ -89,7 +92,6 @@ export async function togglePause() {
         const isPaused = await invoke('toggle_pause');
         state.isPaused = isPaused;
         updatePlayButton();
-        updateStatus(isPaused ? 'Paused' : 'Playing');
     } catch (err) {
         // No track playing, try to play selected
         if (state.playlist.length > 0) {
@@ -106,7 +108,6 @@ export async function stop() {
         state.playingIndex = -1;
         state.duration = null;
         updateNowPlaying('No track selected');
-        updateStatus('Stopped');
         renderCurrentView();
         updatePlayButton();
         resetProgressDisplay();

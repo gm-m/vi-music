@@ -3,6 +3,7 @@ import { state } from './state.js';
 import { escapeHtml } from './utils.js';
 import { updateStatus } from './ui.js';
 import { renderPlaylist } from './views/playlist.js';
+import { scrollElementIntoView } from './scroll.js';
 
 export async function savePlaylist(name, { silentIfExists = false } = {}) {
     if (state.playlist.length === 0) {
@@ -152,22 +153,17 @@ export function renderPlaylistManager() {
         }).join('');
         
         list.querySelectorAll('.playlist-manager-item').forEach(item => {
-            item.addEventListener('click', () => {
+            item.addEventListener('click', (e) => {
                 state.playlistManagerIndex = parseInt(item.dataset.index);
-                renderPlaylistManager();
-            });
-            item.addEventListener('dblclick', () => {
-                loadSelectedPlaylist();
+                if (e.detail === 2) loadSelectedPlaylist();
+                else renderPlaylistManager();
             });
         });
     }
     
     modal.classList.add('visible');
     
-    const selected = list.querySelector('.playlist-manager-item.selected');
-    if (selected) {
-        selected.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    }
+    scrollElementIntoView(list.querySelector('.playlist-manager-item.selected'), list);
 }
 
 export function closePlaylistManager() {
@@ -385,21 +381,16 @@ export function renderAddToPlaylistPicker() {
     list.innerHTML = html;
     
     list.querySelectorAll('.add-to-playlist-item').forEach(item => {
-        item.addEventListener('click', () => {
+        item.addEventListener('click', (e) => {
             state.addToPlaylistIndex = parseInt(item.dataset.index);
-            renderAddToPlaylistPicker();
-        });
-        item.addEventListener('dblclick', () => {
-            confirmAddToPlaylist();
+            if (e.detail === 2) confirmAddToPlaylist();
+            else renderAddToPlaylistPicker();
         });
     });
     
     modal.classList.add('visible');
     
-    const selected = list.querySelector('.add-to-playlist-item.selected');
-    if (selected) {
-        selected.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    }
+    scrollElementIntoView(list.querySelector('.add-to-playlist-item.selected'), list);
 }
 
 export function closeAddToPlaylistPicker() {

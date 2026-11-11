@@ -1,7 +1,7 @@
 import { state } from './state.js';
 import { invoke } from './tauri.js';
 import { formatDuration } from './utils.js';
-import { updateStatus, updateSleepTimerDisplay, updateLoopDisplay } from './ui.js';
+import { updateStatus, updateSleepTimerDisplay, updateLoopDisplay, showOutput } from './ui.js';
 import { seekTo, playTrack, stop, stopLoopMonitor, startLoopMonitor, getElapsed } from './playback.js';
 
 // Sleep Timer
@@ -141,14 +141,12 @@ export function showBookmarks() {
         return;
     }
     
-    const list = keys.map(k => {
+    showOutput('Bookmarks', keys.map(k => {
         const b = state.bookmarks[k];
         const trackName = state.playlist.find(t => t.path === b.track)?.name
             || `${b.track.split(/[\\/]/).pop()} (not in playlist)`;
-        return `'${k}': ${trackName} @ ${formatDuration(b.position)}`;
-    }).join(', ');
-    
-    updateStatus(`Bookmarks: ${list}`);
+        return `'${k}  ${trackName} @ ${formatDuration(b.position)}`;
+    }));
 }
 
 // A-B Loop

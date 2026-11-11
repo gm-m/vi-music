@@ -2,6 +2,7 @@ import { state, elements } from './state.js';
 import { escapeHtml, formatDuration } from './utils.js';
 import { updateStatus, updateModeIndicators } from './ui.js';
 import { playTrack } from './playback.js';
+import { trackLabel } from './tags.js';
 
 export function addToQueue() {
     if (state.viewMode === 'folder') {
@@ -124,7 +125,7 @@ export function renderQueueView() {
         return `
             <div class="queue-item ${isSelected ? 'selected' : ''}" data-index="${queueIndex}">
                 <span class="queue-number">${queueIndex + 1}.</span>
-                <span class="queue-name">${escapeHtml(track.name)}</span>
+                <span class="queue-name">${escapeHtml(trackLabel(track))}</span>
                 <span class="queue-duration">${formatDuration(track.duration)}</span>
             </div>
         `;

@@ -1,5 +1,5 @@
 import { state, elements } from './state.js';
-import { updateStatus, updateModeIndicators, toggleHelp } from './ui.js';
+import { updateStatus, updateModeIndicators, toggleHelp, clearMessage, showMessages, clearMessages } from './ui.js';
 import { playTrack, playSelected, togglePause, stop, nextTrack, prevTrack, setVolume, seekTo, jumpToPercent } from './playback.js';
 import { openFolder, loadFolder, reloadContent, renderFolderView } from './views/folder.js';
 import { openArtistView, renderArtistView } from './views/artist.js';
@@ -40,6 +40,7 @@ const COMMAND_COMPLETIONS = [
     'cue',
     'cues',
     'prune',
+    'messages', 'mes',
     'jump', 'j',
     'addlib', 'al',
     'libs', 'library',
@@ -126,6 +127,7 @@ function navigateCommandHistory(direction) {
 }
 
 export function enterCommandMode() {
+    clearMessage();
     state.mode = 'command';
     state.commandHistoryIndex = state.commandHistory.length;
     state.commandDraft = '';
@@ -393,6 +395,14 @@ export function executeCommand(cmd) {
             break;
         case 'prune':
             pruneMissing();
+            break;
+        case 'messages':
+        case 'mes':
+            if (rawParts[1]?.toLowerCase() === 'clear') {
+                clearMessages();
+            } else {
+                showMessages();
+            }
             break;
         case 'jump':
         case 'j':

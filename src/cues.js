@@ -1,6 +1,6 @@
 import { invoke, open } from './tauri.js';
 import { state } from './state.js';
-import { updateStatus, updateProgressDisplay } from './ui.js';
+import { updateStatus, updateProgressDisplay, showOutput } from './ui.js';
 import { seekTo, getElapsed } from './playback.js';
 import { loadBookmarks } from './features.js';
 import { formatPreciseTime } from './utils.js';
@@ -136,7 +136,8 @@ export function listCues() {
         updateStatus('No cues for this track. Use :cue add [m:ss] [label]');
         return;
     }
-    updateStatus(`Cues: ${cues.map(describeCue).join(', ')}`);
+    showOutput(`Cues: ${track.name}`, cues.map((cue, i) =>
+        `${String(i + 1).padStart(2)}.  ${formatPreciseTime(cue.time).padStart(8)}  ${cue.label ?? ''}`));
 }
 
 async function jumpToCue(cues, cue) {

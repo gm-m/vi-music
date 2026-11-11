@@ -1,9 +1,10 @@
 import { state, elements } from './state.js';
 import { updateStatus } from './ui.js';
 import { formatDuration, syncBackendPlaylist } from './utils.js';
-import { renderPlaylist } from './views/playlist.js';
+import { renderPlaylist, scrollPlaylistToIndex } from './views/playlist.js';
 import { renderFolderView } from './views/folder.js';
 import { invoke } from './tauri.js';
+import { scrollElementIntoView } from './scroll.js';
 
 export function moveSelection(delta) {
     if (state.viewMode === 'folder') {
@@ -49,18 +50,22 @@ export function selectTrack(index) {
     scrollToSelected();
 }
 
-export function scrollToSelected() {
-    const selected = elements.playlist.querySelector('.track-item.selected');
-    if (selected) {
-        selected.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+// Bring the selected row into view. The list view is virtualized (the row may not be in
+// the DOM), so it scrolls by index; other views scroll to the rendered element.
+function scrollSelection(block) {
+    if (state.viewMode === 'list') {
+        scrollPlaylistToIndex(state.selectedIndex, block);
+    } else {
+        scrollElementIntoView(elements.playlist.querySelector('.track-item.selected'), elements.playlist, block);
     }
 }
 
+export function scrollToSelected() {
+    scrollSelection('nearest');
+}
+
 export function scrollToFolderSelected() {
-    const selected = elements.playlist.querySelector('.track-item.selected');
-    if (selected) {
-        selected.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    }
+    scrollSelection('nearest');
 }
 
 export function moveSelectionRelative(offset) {
@@ -89,24 +94,15 @@ export function goToPlayingTrack() {
 
 // Scroll selected element to center/top/bottom of view
 export function centerSelection() {
-    const selected = elements.playlist.querySelector('.track-item.selected');
-    if (selected) {
-        selected.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    }
+    scrollSelection('center');
 }
 
 export function scrollSelectionTop() {
-    const selected = elements.playlist.querySelector('.track-item.selected');
-    if (selected) {
-        selected.scrollIntoView({ block: 'start', behavior: 'smooth' });
-    }
+    scrollSelection('start');
 }
 
 export function scrollSelectionBottom() {
-    const selected = elements.playlist.querySelector('.track-item.selected');
-    if (selected) {
-        selected.scrollIntoView({ block: 'end', behavior: 'smooth' });
-    }
+    scrollSelection('end');
 }
 
 // Reorder track in playlist

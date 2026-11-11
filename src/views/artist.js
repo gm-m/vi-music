@@ -109,14 +109,15 @@ function renderArtistList() {
     
     // Add click handlers
     elements.playlist.querySelectorAll('.track-item').forEach(item => {
-        item.addEventListener('click', () => {
-            state.artistSelectedIndex = parseInt(item.dataset.index);
-            renderArtistView();
-        });
-        item.addEventListener('dblclick', () => {
+        item.addEventListener('click', (e) => {
             const idx = parseInt(item.dataset.index);
-            const artist = state.artistList[idx];
-            if (artist) openArtistTracks(artist.name);
+            state.artistSelectedIndex = idx;
+            if (e.detail === 2) {
+                const artist = state.artistList[idx];
+                if (artist) openArtistTracks(artist.name);
+            } else {
+                renderArtistView();
+            }
         });
     });
 }
@@ -187,16 +188,17 @@ function renderArtistTrackList() {
     
     // Track click handlers
     elements.playlist.querySelectorAll('.track-item').forEach(item => {
-        item.addEventListener('click', () => {
-            state.artistSelectedIndex = parseInt(item.dataset.index);
-            renderArtistView();
-        });
-        item.addEventListener('dblclick', () => {
+        item.addEventListener('click', (e) => {
             const idx = parseInt(item.dataset.index);
-            const track = state.artistTracks[idx];
-            if (track) {
-                const playlistIdx = state.playlist.findIndex(t => t.path === track.path);
-                if (playlistIdx !== -1) playTrack(playlistIdx);
+            state.artistSelectedIndex = idx;
+            if (e.detail === 2) {
+                const track = state.artistTracks[idx];
+                if (track) {
+                    const playlistIdx = state.playlist.findIndex(t => t.path === track.path);
+                    if (playlistIdx !== -1) playTrack(playlistIdx);
+                }
+            } else {
+                renderArtistView();
             }
         });
     });

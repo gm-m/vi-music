@@ -219,12 +219,13 @@ export function renderFolderView() {
     
     // Item click handlers
     elements.playlist.querySelectorAll('.track-item').forEach(item => {
-        item.addEventListener('click', () => {
-            state.folderSelectedIndex = parseInt(item.dataset.index);
-            renderFolderView();
-        });
-        item.addEventListener('dblclick', () => {
-            handleFolderItemAction(parseInt(item.dataset.index));
+        item.addEventListener('click', (e) => {
+            const index = parseInt(item.dataset.index);
+            state.folderSelectedIndex = index;
+            // Single click re-renders and replaces this element, so 'dblclick'
+            // would never reach it; use the click count instead.
+            if (e.detail === 2) handleFolderItemAction(index);
+            else renderFolderView();
         });
     });
     

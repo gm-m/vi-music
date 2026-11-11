@@ -2,11 +2,13 @@
 // All functionality is split into ES modules under src/
 
 import { invoke, listen } from './tauri.js';
-import { state, elements } from './state.js';
+import { elements } from './state.js';
 import { updateVolumeDisplay, setupHelpTabs } from './ui.js';
 import { loadKeybindings } from './keybindings.js';
 import { loadSettings } from './settings.js';
-import { refreshStatus, setupStatusListener, setupMediaControlListener, togglePause, prevTrack, nextTrack, stop, seekTo, setVolume } from './playback.js';
+import { refreshStatus, setupStatusListener, setupMediaControlListener, togglePause, prevTrack, nextTrack, stop, setVolume } from './playback.js';
+import { setupProgressBar } from './progress.js';
+import { updateKeyHints } from './keyhints.js';
 import { handleKeyDown } from './keyboard.js';
 import { handleCommandInput, exitCommandMode } from './commands.js';
 import { handleFilterInput, handleFilterKeydown, exitFilterMode } from './filter.js';
@@ -41,7 +43,10 @@ async function loadDefaultFolder() {
 
 // Event Listeners
 function setupEventListeners() {
-    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keydown', (e) => {
+        handleKeyDown(e);
+        updateKeyHints();
+    });
     
     elements.playBtn.addEventListener('click', togglePause);
     elements.prevBtn.addEventListener('click', prevTrack);
@@ -55,18 +60,10 @@ function setupEventListeners() {
     elements.filterInput.addEventListener('keydown', handleFilterKeydown);
     elements.filterInput.addEventListener('blur', exitFilterMode);
     
-    elements.progressBar.addEventListener('click', handleProgressBarClick);
+    setupProgressBar();
     
     elements.volumeBar.addEventListener('click', handleVolumeBarClick);
     elements.volumeBar.addEventListener('mousedown', handleVolumeBarDragStart);
-}
-
-function handleProgressBarClick(e) {
-    if (!state.isPlaying || !state.duration) return;
-    
-    const rect = elements.progressBar.getBoundingClientRect();
-    const percent = (e.clientX - rect.left) / rect.width;
-    seekTo(Math.max(0, percent) * state.duration);
 }
 
 function handleVolumeBarClick(e) {

@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { closeModals, toggleHelp, updateStatus } from './ui.js';
+import { closeModals, toggleHelp, updateStatus, handleOutputKeyDown } from './ui.js';
 import { getKeyString, getKeyAction } from './keybindings.js';
 import { moveSelection, goToTop, goToBottom, selectTrack, scrollToSelected, goToPlayingTrack, centerSelection, scrollSelectionTop, scrollSelectionBottom, moveTrackDown, moveTrackUp, findNextArtist, findPrevArtist, navBack } from './navigation.js';
 import { playSelected, togglePause, stop, nextTrack, prevTrack, adjustVolume, toggleMute, changeSpeed, resetSpeed, seekRelative, toggleRepeat, toggleShuffle, seekToStart, seekToEnd, getElapsed } from './playback.js';
@@ -170,6 +170,12 @@ export function executeAction(action, e) {
 export function handleKeyDown(e) {
     // Ignore if typing in command or filter input
     if (state.mode === 'command' || state.mode === 'filter') {
+        return;
+    }
+    
+    // Output popup (long command output, :messages) captures keys while open
+    if (state.outputOpen) {
+        handleOutputKeyDown(e);
         return;
     }
     

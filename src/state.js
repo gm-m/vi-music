@@ -61,6 +61,11 @@ export const state = {
     // Cue points per track (persisted): { 'path': [{ time, label? }, ...] } sorted by time
     cues: {},
     cueMarkersKey: null, // Cache key to avoid re-rendering cue markers every tick
+    // Messages shown in the footer, with history for :messages
+    messages: [], // { text, level, time }
+    outputOpen: false, // Output popup (long command output, :messages)
+    // Progress bar drag preview position (seconds), null when not dragging
+    progressDragPosition: null,
     // A-B Loop
     loopA: null, // Start position in seconds
     loopB: null, // End position in seconds
@@ -82,6 +87,7 @@ export const state = {
         carryposition: false, // Keep current playback position when manually changing tracks
         remainingtime: false, // Show remaining time (countdown) instead of elapsed
         theme: 'default',
+        tags: true, // Show title/artist from tags instead of file names
     },
 };
 
@@ -103,6 +109,13 @@ export const elements = {
     playlist: document.getElementById('playlist'),
     playlistCount: document.getElementById('playlistCount'),
     helpBar: document.getElementById('helpBar'),
+    footer: document.getElementById('footer'),
+    messageLine: document.getElementById('messageLine'),
+    showcmd: document.getElementById('showcmd'),
+    keyHints: document.getElementById('keyHints'),
+    outputModal: document.getElementById('outputModal'),
+    outputTitle: document.getElementById('outputTitle'),
+    outputBody: document.getElementById('outputBody'),
     commandLine: document.getElementById('commandLine'),
     commandInput: document.getElementById('commandInput'),
     filterLine: document.getElementById('filterLine'),
@@ -110,6 +123,8 @@ export const elements = {
     helpModal: document.getElementById('helpModal'),
     progressBar: document.getElementById('progressBar'),
     progressFill: document.getElementById('progressFill'),
+    progressTooltip: document.getElementById('progressTooltip'),
+    loopRange: document.getElementById('loopRange'),
     cueMarkers: document.getElementById('cueMarkers'),
     timeElapsed: document.getElementById('timeElapsed'),
     timeTotal: document.getElementById('timeTotal'),

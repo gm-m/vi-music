@@ -154,6 +154,15 @@ Per-track cue points, persisted in `cues.json` in the config directory and shown
 | `?` | Toggle help |
 | `Esc` | Close modals / Exit mode |
 
+Pending counts and keys (e.g. `3`, `g`, `'`) are shown next to the mode indicator, like Vim's `showcmd`. After a short pause, a popup lists the possible continuations (for `'` and `m` it lists your bookmarks).
+
+Messages appear in the footer for a few seconds (errors in red) and are kept in a history (`:messages`). Long output such as `:cues`, `:marks`, `:set`, `:libs` and `:devices` opens in a scrollable popup (`j`/`k`, `g`/`G`, `q`/`Esc` to close).
+
+### Progress Bar (mouse)
+- Click or drag to seek; hovering shows the time under the cursor
+- Click a cue marker to jump to it (hover shows its number and label)
+- The A-B loop range is highlighted on the bar
+
 ### Folder View
 In folder view, you can browse the folder structure with a breadcrumb showing your current path:
 - **`j`/`k`** - Navigate items
@@ -264,6 +273,7 @@ Press `Tab` in command mode to autocomplete command names. Use `Up` and `Down` t
 - `:cue export [file]` - Export cues as a CUE sheet (default: `<track>.cue` next to the audio file; `export!` overwrites)
 - `:cue import [file]` - Merge cues from a CUE sheet (without a file, opens a file picker)
 - `:prune` - Remove cues, bookmarks and cached metadata of files that no longer exist
+- `:messages` or `:mes` - Show the message history (`:mes clear` clears it)
 - `:<line>d` - Delete track at line number (e.g., `:5d`)
 - `:<start>,<end>d` - Delete range of tracks (e.g., `:10,20d`)
 - `:set <option>` - Enable a setting (e.g., `:set relativenumber`)
@@ -292,6 +302,7 @@ Press `Tab` in command mode to autocomplete command names. Use `Up` and `Down` t
 | `carryposition` | `cp` | `false` | Keep the current playback timestamp when manually changing tracks |
 | `remainingtime` | `rt` | `false` | Show remaining time (countdown) instead of total duration |
 | `theme` | `th` | `default` | Color theme: `default`, `gruvbox`, `catppuccin`, `light`, or `custom` |
+| `tags` | `tg` | `true` | Show title and artist from tags (loaded for visible tracks) instead of file names |
 
 Numeric settings are changed with `:set <setting>=<value>`, e.g., `:set seektime=10`.
 

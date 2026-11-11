@@ -1,12 +1,14 @@
 import { state, elements } from './state.js';
-import { updateStatus, updateModeIndicators } from './ui.js';
+import { updateStatus, updateModeIndicators, clearMessage } from './ui.js';
 import { renderPlaylist } from './views/playlist.js';
 import { renderFolderView } from './views/folder.js';
 import { renderArtistView } from './views/artist.js';
 import { scrollToSelected, selectTrack } from './navigation.js';
+import { trackSearchText, requestTrackTags, onTagsLoaded } from './tags.js';
 
 // Filter Mode
 export function enterFilterMode() {
+    clearMessage();
     state.mode = 'filter';
     elements.modeIndicator.textContent = 'FILTER';
     elements.modeIndicator.classList.add('filter');
@@ -90,13 +92,19 @@ export function applyFilter() {
             .filter(({ item }) => matcher(item.name));
         renderFolderView();
     } else {
+        // Also match on tags; load the missing ones and re-filter when they arrive
+        requestTrackTags(state.playlist.map(t => t.path));
         state.filteredPlaylist = state.playlist
             .map((track, index) => ({ track, index }))
-            .filter(({ track }) => matcher(track.name));
+            .filter(({ track }) => matcher(trackSearchText(track)));
         renderPlaylist();
     }
     updateFilterStatus();
 }
+
+onTagsLoaded(() => {
+    if (state.filterText && state.viewMode === 'list') applyFilter();
+});
 
 export function clearFilter() {
     state.filterText = '';
@@ -208,8 +216,8 @@ function updateFilterStatus() {
     }
     
     if (state.filterText && matchCount > 0) {
-        updateStatus(`${matchCount} matches`);
+        updateStatus(`${matchCount} matches`, { history: false });
     } else if (state.filterText) {
-        updateStatus('No matches');
+        updateStatus('No matches', { history: false });
     }
 }
