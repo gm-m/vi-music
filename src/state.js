@@ -6,6 +6,7 @@ export const state = {
     filterText: '',
     selectedIndex: 0,
     playingIndex: -1,
+    playingPath: null,
     isPlaying: false,
     isPaused: false,
     volume: 1.0,
@@ -75,7 +76,7 @@ export const state = {
     // Last action for . repeat
     lastAction: null, // { action, count }
     // Navigation history for Ctrl+o
-    navHistory: [], // Stack of { viewMode, selectedIndex, rootFolder, currentFolder }
+    navHistory: [],
     // Settings
     settings: {
         relativenumber: false, // Show relative line numbers

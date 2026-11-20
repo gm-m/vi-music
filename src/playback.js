@@ -7,6 +7,11 @@ import { handleFolderItemAction, renderFolderView } from './views/folder.js';
 import { updateQueueDisplay, dequeueNextIndex } from './queue.js';
 import { trackLabel, requestTrackTags } from './tags.js';
 
+let playbackId = 0;
+let finishedPlaybackId = null;
+let playbackRequest = 0;
+let pendingTransportCommands = 0;
+
 // View-aware render: re-renders whichever view is currently active
 function renderCurrentView() {
     if (state.viewMode === 'artist') {
@@ -59,31 +64,41 @@ function getTrackStartPosition(index, seekPosition, allowCarryPosition) {
 }
 
 export async function playTrack(index, seekPosition = null, allowCarryPosition = true) {
+    playbackRequest++;
+    pendingTransportCommands++;
     try {
         const startPosition = getTrackStartPosition(index, seekPosition, allowCarryPosition);
+        const result = await invoke('play_track', { index, skipSecs: startPosition });
+        playbackId = result.playback_id;
         // Clear A-B loop when changing tracks
-        if (state.playingIndex !== index) {
+        if (state.playingPath !== result.path) {
             state.loopA = null;
             state.loopB = null;
             stopLoopMonitor();
             updateLoopDisplay();
         }
         
-        const result = await invoke('play_track', { index, skipSecs: startPosition });
-        state.playingIndex = index;
+        state.playingPath = result.path;
+        state.playingIndex = state.playlist[index]?.path === result.path
+            ? index : state.playlist.findIndex(track => track.path === result.path);
         state.isPlaying = true;
         state.isPaused = false;
         state.duration = result.duration;
         setElapsed(startPosition);
-        const track = state.playlist[index];
+        const track = state.playlist[state.playingIndex];
         updateNowPlaying(track ? trackLabel(track) : result.name);
         if (track) requestTrackTags([track.path]);
         renderCurrentView();
         updatePlayButton();
         updateProgressDisplay();
+        return true;
     } catch (err) {
         console.error('Failed to play track:', err);
         updateStatus(`Error: ${err}`);
+        return false;
+    } finally {
+        pendingTransportCommands--;
+        advanceFinishedPlayback();
     }
 }
 
@@ -101,18 +116,29 @@ export async function togglePause() {
 }
 
 export async function stop() {
+    playbackRequest++;
+    pendingTransportCommands++;
     try {
         await invoke('stop');
         state.isPlaying = false;
         state.isPaused = false;
         state.playingIndex = -1;
+        state.playingPath = null;
         state.duration = null;
+        setElapsed(0);
+        state.loopA = null;
+        state.loopB = null;
+        stopLoopMonitor();
+        updateLoopDisplay();
         updateNowPlaying('No track selected');
         renderCurrentView();
         updatePlayButton();
         resetProgressDisplay();
     } catch (err) {
         console.error('Failed to stop:', err);
+    } finally {
+        pendingTransportCommands--;
+        advanceFinishedPlayback();
     }
 }
 
@@ -225,7 +251,7 @@ export function jumpToPercent(percent) {
         updateStatus('No track playing');
         return;
     }
-    const position = Math.floor((percent / 100) * state.duration);
+    const position = (percent / 100) * state.duration;
     seekTo(position);
     updateStatus(`Jumped to ${percent}%`);
 }
@@ -245,7 +271,7 @@ export function seekToEnd() {
         updateStatus('No track playing');
         return;
     }
-    seekTo(Math.floor(state.duration - 0.5));
+    seekTo(Math.max(0, state.duration - 0.05));
     updateStatus('Seeked to end');
 }
 
@@ -277,44 +303,49 @@ export function toggleShuffle() {
     updateStatus(`Shuffle: ${state.shuffleMode ? 'on' : 'off'}`);
 }
 
-export function handleTrackEnd() {
+function advanceFinishedPlayback() {
+    if (pendingTransportCommands === 0 && state.isPlaying && finishedPlaybackId === playbackId) {
+        finishedPlaybackId = null;
+        void handleTrackEnd();
+    }
+}
+
+async function handleTrackEnd() {
     // Cap progress at 100%
     if (state.duration) {
         state.elapsed = state.duration;
     }
     updateProgressDisplay();
+
+    async function advance(start) {
+        const attempt = start();
+        const request = playbackRequest;
+        const played = await attempt;
+        return played || request !== playbackRequest;
+    }
     
     // Check queue first (unless repeat-one is active)
-    if (state.repeatMode !== 'one' && state.queue.length > 0) {
+    while (state.repeatMode !== 'one' && state.queue.length > 0) {
         const nextIndex = dequeueNextIndex();
         updateQueueDisplay();
-        if (nextIndex !== -1) {
-            playTrack(nextIndex, 0, false);
-            return;
-        }
+        if (nextIndex !== -1 && await advance(() => playTrack(nextIndex, 0, false))) return;
     }
     
     if (state.repeatMode === 'one') {
         // Repeat current track
-        playTrack(state.playingIndex, 0, false);
+        if (state.playingIndex >= 0 && await advance(() => playTrack(state.playingIndex, 0, false))) return;
     } else if (state.shuffleMode) {
         // Play random track
-        playNextShuffle(false);
-    } else if (state.repeatMode === 'all') {
-        // Play next, wrap around
-        const nextIndex = (state.playingIndex + 1) % state.playlist.length;
-        playTrack(nextIndex, 0, false);
+        if (await advance(() => playNextShuffle(false))) return;
     } else {
-        // No repeat - play next if not at end
-        if (state.playingIndex < state.playlist.length - 1) {
-            playTrack(state.playingIndex + 1, 0, false);
-        } else {
-            // End of playlist
-            state.isPlaying = false;
-            elements.playIcon.style.display = 'block';
-            elements.pauseIcon.style.display = 'none';
+        const trackCount = state.playlist.length;
+        const first = state.playingIndex + 1;
+        const end = state.repeatMode === 'all' ? first + trackCount : trackCount;
+        for (let i = first; i < end; i++) {
+            if (await advance(() => playTrack(i % trackCount, 0, false))) return;
         }
     }
+    await stop();
 }
 
 export function playNextShuffle(allowCarryPosition = true) {
@@ -324,8 +355,7 @@ export function playNextShuffle(allowCarryPosition = true) {
     if (state.shuffleIndex < state.shuffleHistory.length - 1) {
         state.shuffleIndex++;
         state.selectedIndex = state.shuffleHistory[state.shuffleIndex];
-        playTrack(state.shuffleHistory[state.shuffleIndex], null, allowCarryPosition);
-        return;
+        return playTrack(state.shuffleHistory[state.shuffleIndex], null, allowCarryPosition);
     }
     
     // Pick a random track (avoid current if possible)
@@ -341,7 +371,7 @@ export function playNextShuffle(allowCarryPosition = true) {
     state.shuffleHistory.push(nextIndex);
     state.shuffleIndex = state.shuffleHistory.length - 1;
     state.selectedIndex = nextIndex;
-    playTrack(nextIndex, null, allowCarryPosition);
+    return playTrack(nextIndex, null, allowCarryPosition);
 }
 
 export function playPrevShuffle() {
@@ -356,7 +386,7 @@ export function playPrevShuffle() {
 // Progress: the backend pushes `player-status` on changes (and every 250ms while playing)
 // and `track-finished` once when a track ends
 function applyStatus(status) {
-    if (!state.isPlaying) return;
+    if (!state.isPlaying || !status.is_playing || status.playback_id !== playbackId) return;
     
     setElapsed(status.elapsed);
     state.duration = status.duration;
@@ -374,8 +404,9 @@ export async function setupStatusListener(listen) {
     if (!listen) return;
     
     await listen('player-status', (event) => applyStatus(event.payload));
-    await listen('track-finished', () => {
-        if (state.isPlaying) handleTrackEnd();
+    await listen('track-finished', (event) => {
+        finishedPlaybackId = event.payload;
+        advanceFinishedPlayback();
     });
 }
 
@@ -463,6 +494,7 @@ export async function setupMediaControlListener(listen) {
 export async function refreshStatus() {
     try {
         const status = await invoke('get_status');
+        playbackId = status.playback_id;
         state.isPlaying = status.is_playing;
         state.isPaused = status.is_paused;
         state.volume = status.volume;

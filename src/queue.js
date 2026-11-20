@@ -3,6 +3,7 @@ import { escapeHtml, formatDuration } from './utils.js';
 import { updateStatus, updateModeIndicators } from './ui.js';
 import { playTrack } from './playback.js';
 import { trackLabel } from './tags.js';
+import { scrollElementIntoView } from './scroll.js';
 
 export function addToQueue() {
     if (state.viewMode === 'folder') {
@@ -130,6 +131,7 @@ export function renderQueueView() {
             </div>
         `;
     }).join('');
+    scrollElementIntoView(elements.queueList.querySelector('.selected'), elements.queueList);
 }
 
 export function handleQueueViewKeyDown(e) {
@@ -208,11 +210,10 @@ export function handleQueueViewKeyDown(e) {
             state.countPrefix = '';
             break;
         case 'G':
-            if (state.countPrefix) {
-                state.queueSelectedIndex = Math.min(count - 1, state.queue.length - 1);
-            } else {
-                state.queueSelectedIndex = Math.max(0, state.queue.length - 1);
-            }
+            state.queueSelectedIndex = Math.max(0, Math.min(
+                state.countPrefix ? count - 1 : state.queue.length - 1,
+                state.queue.length - 1
+            ));
             renderQueueView();
             state.countPrefix = '';
             break;

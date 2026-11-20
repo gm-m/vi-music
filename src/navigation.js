@@ -1,8 +1,9 @@
 import { state, elements } from './state.js';
-import { updateStatus } from './ui.js';
+import { updateStatus, refreshNowPlaying } from './ui.js';
 import { formatDuration, syncBackendPlaylist } from './utils.js';
 import { renderPlaylist, scrollPlaylistToIndex } from './views/playlist.js';
-import { renderFolderView } from './views/folder.js';
+import { renderFolderView, updateViewModeIndicator } from './views/folder.js';
+import { applyFilter } from './filter.js';
 import { invoke } from './tauri.js';
 import { scrollElementIntoView } from './scroll.js';
 
@@ -217,34 +218,50 @@ async function getTrackArtist(path) {
 
 // Navigation history for Ctrl+o
 export function pushNavHistory() {
+    if (!state.rootFolder) return;
     state.navHistory.push({
         viewMode: state.viewMode,
+        playlist: state.playlist.slice(),
+        currentPlaylistName: state.currentPlaylistName,
         selectedIndex: state.selectedIndex,
-        folderSelectedIndex: state.folderSelectedIndex,
         rootFolder: state.rootFolder,
         currentFolder: state.currentFolder,
+        folderContents: state.folderContents,
+        folderSelectedIndex: state.folderSelectedIndex,
+        folderParent: state.folderParent,
+        artistList: state.artistList,
+        artistTracks: state.artistTracks,
+        artistViewMode: state.artistViewMode,
+        artistSelectedIndex: state.artistSelectedIndex,
+        currentArtist: state.currentArtist,
+        filterText: state.filterText,
     });
     if (state.navHistory.length > 50) state.navHistory.shift();
 }
 
-export function navBack() {
+export async function navBack() {
     if (state.navHistory.length === 0) {
         updateStatus('No navigation history');
         return;
     }
     const prev = state.navHistory.pop();
-    state.viewMode = prev.viewMode;
-    state.selectedIndex = prev.selectedIndex;
-    state.folderSelectedIndex = prev.folderSelectedIndex;
-    state.rootFolder = prev.rootFolder;
-    state.currentFolder = prev.currentFolder;
-    
-    if (state.viewMode === 'folder') {
-        import('./views/folder.js').then(m => m.loadFolderContents(prev.currentFolder));
-    } else if (state.viewMode === 'artist') {
-        import('./views/artist.js').then(m => m.renderArtistView());
-    } else {
-        renderPlaylist();
+    try {
+        await invoke('set_playlist', { paths: prev.playlist.map(track => track.path) });
+    } catch (err) {
+        state.navHistory.push(prev);
+        updateStatus(`Failed to navigate back: ${err}`);
+        return;
     }
+    Object.assign(state, prev);
+    state.playingIndex = state.playlist.findIndex(track => track.path === state.playingPath);
+    state.deletedTracks = [];
+    state.shuffleHistory = [];
+    state.shuffleIndex = -1;
+    state.lastVisualSelection = null;
+    elements.filterInput.value = state.filterText;
+    updateViewModeIndicator();
+    applyFilter();
+    scrollToSelected();
+    refreshNowPlaying();
     updateStatus('Navigated back');
 }

@@ -22,7 +22,7 @@ pub struct TrackInfo {
     pub path: String,
     pub name: String,
     pub index: usize,
-    pub duration: Option<u64>,
+    pub duration: Option<f64>,
 }
 
 pub fn file_name(path: &str) -> String {
@@ -50,7 +50,7 @@ struct FolderItem {
     path: String,
     is_folder: bool,
     track_count: usize,
-    duration: Option<u64>,
+    duration: Option<f64>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -60,15 +60,15 @@ pub struct FolderContents {
     items: Vec<FolderItem>,
 }
 
-pub fn get_audio_duration(path: &str) -> Option<u64> {
+pub fn get_audio_duration(path: &str) -> Option<f64> {
     let ext = Path::new(path).extension()?.to_str()?.to_lowercase();
     
     match ext.as_str() {
         "mp3" => {
             // Try mp3_duration first, fall back to symphonia if it fails
             // (mp3_duration fails on some MP3s with embedded cover art)
-            if let Some(d) = mp3_duration::from_path(path).ok().map(|d| d.as_secs()) {
-                return Some(d);
+            if let Ok(duration) = mp3_duration::from_path(path) {
+                return Some(duration.as_secs_f64());
             }
             symphonia_duration(path)
         }
@@ -83,12 +83,12 @@ pub fn get_audio_duration(path: &str) -> Option<u64> {
             
             let file = File::open(path).ok()?;
             let source = Decoder::new(BufReader::new(file)).ok()?;
-            source.total_duration().map(|d| d.as_secs())
+            source.total_duration().map(|d| d.as_secs_f64())
         }
     }
 }
 
-fn symphonia_duration(path: &str) -> Option<u64> {
+fn symphonia_duration(path: &str) -> Option<f64> {
     let file = fs::File::open(path).ok()?;
     let mss = MediaSourceStream::new(Box::new(file), Default::default());
     
@@ -110,13 +110,13 @@ fn symphonia_duration(path: &str) -> Option<u64> {
         .iter()
         .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)?;
     
-    let sample_rate = track.codec_params.sample_rate? as u64;
+    let sample_rate = track.codec_params.sample_rate?;
     if sample_rate == 0 {
         return None;
     }
     let n_frames = track.codec_params.n_frames?;
     
-    Some(n_frames / sample_rate)
+    Some(n_frames as f64 / f64::from(sample_rate))
 }
 
 pub fn is_audio_file(path: &Path) -> bool {

@@ -3,8 +3,8 @@ import { state, elements } from '../state.js';
 import { escapeHtml, formatDuration } from '../utils.js';
 import { updateStatus } from '../ui.js';
 import { playTrack } from '../playback.js';
-import { renderPlaylist } from './playlist.js';
-import { scrollToFolderSelected } from '../navigation.js';
+import { pushNavHistory, scrollToFolderSelected } from '../navigation.js';
+import { applyFilter, clearFilter } from '../filter.js';
 
 export async function openFolder() {
     try {
@@ -26,14 +26,16 @@ export async function loadFolder(path) {
     try {
         updateStatus('Loading...');
         const tracks = await invoke('load_folder', { path });
+        pushNavHistory();
         state.playlist = tracks;
         state.selectedIndex = 0;
-        state.playingIndex = -1;
+        state.playingIndex = tracks.findIndex(track => track.path === state.playingPath);
         state.rootFolder = path;
         state.currentFolder = path;
         state.viewMode = 'list';
         state.currentPlaylistName = null;
-        renderPlaylist();
+        updateViewModeIndicator();
+        clearFilter();
         updateStatus(`Loaded ${tracks.length} tracks`);
     } catch (err) {
         console.error('Failed to load folder:', err);
@@ -55,18 +57,12 @@ export async function reloadContent() {
     }
     
     const previousCount = state.playlist.length;
-    const currentlyPlaying = state.playingIndex >= 0 ? state.playlist[state.playingIndex]?.path : null;
-    
     try {
         updateStatus('Reloading...');
         const tracks = await invoke('load_folder', { path: state.rootFolder });
         state.playlist = tracks;
         
-        // Try to restore playing index if track still exists
-        if (currentlyPlaying) {
-            const newIndex = tracks.findIndex(t => t.path === currentlyPlaying);
-            state.playingIndex = newIndex; // -1 if not found
-        }
+        state.playingIndex = tracks.findIndex(track => track.path === state.playingPath);
         
         // Adjust selected index if needed
         if (state.selectedIndex >= tracks.length) {
@@ -75,9 +71,9 @@ export async function reloadContent() {
         
         // If in folder view, also reload folder contents
         if (state.viewMode === 'folder') {
-            await loadFolderContents(state.currentFolder);
+            await loadFolderContents(state.currentFolder, { recordHistory: false });
         } else {
-            renderPlaylist();
+            applyFilter();
         }
         
         const diff = tracks.length - previousCount;
@@ -97,34 +93,33 @@ export function toggleViewMode() {
     }
     
     if (state.viewMode === 'list') {
-        state.viewMode = 'folder';
-        state.currentFolder = state.rootFolder;
-        state.folderSelectedIndex = 0;
-        loadFolderContents(state.currentFolder);
+        loadFolderContents(state.rootFolder);
     } else {
+        pushNavHistory();
         state.viewMode = 'list';
         state.selectedIndex = 0;
-        renderPlaylist();
+        clearFilter();
         updateStatus('List view');
     }
     updateViewModeIndicator();
 }
 
-export async function loadFolderContents(path) {
+export async function loadFolderContents(path, { recordHistory = true } = {}) {
     try {
         const contents = await invoke('browse_folder', { 
             path, 
             rootPath: state.rootFolder 
         });
+        if (recordHistory && (state.viewMode !== 'folder' || path !== state.currentFolder)) {
+            pushNavHistory();
+        }
+        state.viewMode = 'folder';
         state.folderContents = contents.items;
         state.currentFolder = contents.path;
         state.folderParent = contents.parent;
         state.folderSelectedIndex = 0;
-        // Clear filter when navigating folders
-        state.filterText = '';
-        state.filteredFolderContents = [];
-        elements.filterInput.value = '';
-        renderFolderView();
+        updateViewModeIndicator();
+        clearFilter();
         updateStatus(`Folder: ${getFolderName(path)}`);
     } catch (err) {
         console.error('Failed to load folder contents:', err);
@@ -285,13 +280,14 @@ export async function loadCurrentFolderAsPlaylist() {
     try {
         updateStatus('Loading folder...');
         const tracks = await invoke('load_folder', { path: state.currentFolder });
+        pushNavHistory();
         state.playlist = tracks;
         state.selectedIndex = 0;
-        state.playingIndex = -1;
+        state.playingIndex = tracks.findIndex(track => track.path === state.playingPath);
         state.queue = [];
         state.viewMode = 'list';
         state.currentPlaylistName = null;
-        renderPlaylist();
+        clearFilter();
         updateViewModeIndicator();
         updateStatus(`Loaded ${tracks.length} tracks from folder`);
     } catch (err) {

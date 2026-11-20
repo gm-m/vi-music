@@ -2,7 +2,9 @@ import { invoke } from './tauri.js';
 import { state } from './state.js';
 import { escapeHtml } from './utils.js';
 import { updateStatus } from './ui.js';
-import { renderPlaylist } from './views/playlist.js';
+import { pushNavHistory } from './navigation.js';
+import { clearFilter } from './filter.js';
+import { updateViewModeIndicator } from './views/folder.js';
 import { scrollElementIntoView } from './scroll.js';
 
 export async function savePlaylist(name, { silentIfExists = false } = {}) {
@@ -23,12 +25,11 @@ export async function savePlaylist(name, { silentIfExists = false } = {}) {
     try {
         // Check if playlist already exists
         const playlists = await invoke('list_playlists');
-        const exists = playlists.some(p => p.name.toLowerCase() === name.toLowerCase());
+        const exists = playlists.some(p => p.name === name);
 
         // Skip the overwrite prompt when re-saving the current playlist
         // (or when explicitly requested via silentIfExists)
-        const isCurrent = state.currentPlaylistName
-            && state.currentPlaylistName.toLowerCase() === name.toLowerCase();
+        const isCurrent = state.currentPlaylistName === name;
 
         if (exists && !isCurrent && !silentIfExists
             && !confirm(`Playlist "${name}" already exists. Overwrite?`)) {
@@ -55,14 +56,16 @@ export async function loadSavedPlaylist(name) {
         if (state.rootFolder) {
             state.previousRootFolder = state.rootFolder;
         }
+        pushNavHistory();
         
         state.playlist = tracks;
         state.selectedIndex = 0;
-        state.playingIndex = -1;
+        state.playingIndex = tracks.findIndex(track => track.path === state.playingPath);
         state.viewMode = 'list';
         state.rootFolder = `Playlist: ${name}`;
         state.currentPlaylistName = name;
-        renderPlaylist();
+        updateViewModeIndicator();
+        clearFilter();
         updateStatus(`Loaded "${name}" (${tracks.length} tracks)`);
     } catch (err) {
         console.error('Failed to load playlist:', err);

@@ -9,10 +9,11 @@ use crate::player::AudioPlayer;
 
 pub struct AppState {
     pub player: AudioPlayer,
+    pub playback_id: Mutex<u64>,
     pub playlist: Mutex<Vec<String>>,
     pub current_index: Mutex<usize>,
     pub current_track: Mutex<Option<String>>,
-    pub current_duration: Mutex<Option<u64>>,
+    pub current_duration: Mutex<Option<f64>>,
     pub volume: Mutex<f32>,
     pub is_playing: Mutex<bool>,
     pub is_paused: Mutex<bool>,
@@ -25,6 +26,7 @@ impl AppState {
     pub fn new() -> Self {
         Self {
             player: AudioPlayer::new(),
+            playback_id: Mutex::new(0),
             playlist: Mutex::new(Vec::new()),
             current_index: Mutex::new(0),
             current_track: Mutex::new(None),
@@ -58,7 +60,7 @@ impl AppState {
         }
     }
     
-    pub fn update_media_metadata(&self, title: &str, duration: Option<u64>) {
+    pub fn update_media_metadata(&self, title: &str, duration: Option<f64>) {
         if let Ok(mut controls) = self.media_controls.lock() {
             if let Some(ref mut mc) = *controls {
                 let _ = mc.set_metadata(MediaMetadata {
@@ -66,7 +68,7 @@ impl AppState {
                     artist: Some("VI Music"),
                     album: None,
                     cover_url: None,
-                    duration: duration.map(Duration::from_secs),
+                    duration: duration.map(Duration::from_secs_f64),
                 });
             }
         }

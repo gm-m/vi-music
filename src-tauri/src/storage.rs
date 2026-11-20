@@ -2,7 +2,7 @@
 
 use serde::{de::DeserializeOwned, Serialize};
 use std::fs;
-use std::io::ErrorKind;
+use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 
 pub fn config_dir() -> Result<PathBuf, String> {
@@ -46,6 +46,22 @@ pub fn read_json_file<T: DeserializeOwned>(path: &Path) -> Result<Option<T>, Str
 pub fn write_json_file<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
     let content = serde_json::to_string_pretty(value).map_err(|e| e.to_string())?;
     write_text(path, &content)
+}
+
+// Create a JSON file without replacing an existing file at the same path.
+pub fn create_json_file<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
+    let content = serde_json::to_vec_pretty(value).map_err(|e| e.to_string())?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let mut file = fs::OpenOptions::new().write(true).create_new(true).open(path)
+        .map_err(|e| e.to_string())?;
+    if let Err(err) = file.write_all(&content) {
+        drop(file);
+        let _ = fs::remove_file(path);
+        return Err(err.to_string());
+    }
+    Ok(())
 }
 
 // Read a JSON file from the config directory, falling back to the default value

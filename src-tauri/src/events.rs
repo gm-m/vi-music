@@ -19,7 +19,7 @@ pub fn spawn_status_emitter(app: AppHandle) {
         let mut last_key = None;
         let mut last_elapsed = 0.0;
         let mut last_emit = Instant::now();
-        let mut was_finished = false;
+        let mut last_finished_track = None;
         
         loop {
             thread::sleep(TICK);
@@ -27,6 +27,7 @@ pub fn spawn_status_emitter(app: AppHandle) {
             
             // Any change other than the natural advance of the position is pushed immediately
             let key = (
+                status.playback_id,
                 status.is_playing,
                 status.is_paused,
                 status.is_finished,
@@ -46,11 +47,11 @@ pub fn spawn_status_emitter(app: AppHandle) {
                 last_emit = Instant::now();
             }
             
-            // Emitted once per finished track (the flag resets when a new track starts)
-            if status.is_playing && status.is_finished && !was_finished {
-                let _ = app.emit_all(TRACK_FINISHED_EVENT, ());
+            // Identify the finished playback even when consecutive tracks finish between samples.
+            if status.is_playing && status.is_finished && last_finished_track != Some(status.playback_id) {
+                let _ = app.emit_all(TRACK_FINISHED_EVENT, status.playback_id);
+                last_finished_track = Some(status.playback_id);
             }
-            was_finished = status.is_finished;
         }
     });
 }

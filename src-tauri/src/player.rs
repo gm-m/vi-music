@@ -15,7 +15,7 @@ use symphonia::core::probe::Hint;
 
 #[derive(Clone)]
 pub enum AudioCommand {
-    Play(String, f32, f64),
+    Play(String, f32, f64, Sender<Result<(), String>>),
     Pause,
     Resume,
     Stop,
@@ -194,7 +194,7 @@ impl rodio::Source for SymphoniaSource {
             return None;
         }
         self.total_samples.map(|n| {
-            std::time::Duration::from_secs(n / self.sample_rate as u64)
+            std::time::Duration::from_secs_f64(n as f64 / f64::from(self.sample_rate))
         })
     }
 }
@@ -281,34 +281,27 @@ impl AudioPlayer {
                 // Use timeout to periodically check sink status
                 match rx.recv_timeout(Duration::from_millis(100)) {
                     Ok(cmd) => match cmd {
-                        AudioCommand::Play(path, volume, skip_secs) => {
-                            if let Some(sink) = current_sink.take() {
-                                sink.stop();
-                            }
-                            
+                        AudioCommand::Play(path, volume, skip_secs, reply) => {
                             let current_speed = state_clone.lock().unwrap().speed;
-                            
-                            // Try to play, recreating output stream if needed
-                            let mut played = false;
-                            if let Some(ref handle) = audio_output.as_ref().map(|(_, h)| h) {
-                                if let Some(sink) = play_file(&path, volume, current_speed, skip_secs, handle, false) {
-                                    current_sink = Some(sink);
-                                    played = true;
+                            let prepare = |handle: &rodio::OutputStreamHandle| {
+                                play_file(&path, volume, current_speed, skip_secs, handle, true)
+                            };
+                            let mut replacement_output = None;
+                            let next_sink = audio_output.as_ref().and_then(|(_, handle)| prepare(handle))
+                                .or_else(|| {
+                                    let output = create_output_for_device(&selected_device_name)?;
+                                    let sink = prepare(&output.1)?;
+                                    replacement_output = Some(output);
+                                    Some(sink)
+                                });
+
+                            let result = if let Some(sink) = next_sink {
+                                if let Some(previous) = current_sink.take() {
+                                    previous.stop();
                                 }
-                            }
-                            
-                            // If playback failed, try recreating the audio output (device may have changed)
-                            if !played {
-                                audio_output = create_output_for_device(&selected_device_name);
-                                if let Some(ref handle) = audio_output.as_ref().map(|(_, h)| h) {
-                                    if let Some(sink) = play_file(&path, volume, current_speed, skip_secs, handle, false) {
-                                        current_sink = Some(sink);
-                                        played = true;
-                                    }
+                                if let Some(output) = replacement_output {
+                                    audio_output = Some(output);
                                 }
-                            }
-                            
-                            if played {
                                 let mut state = state_clone.lock().unwrap();
                                 state.start_time = Some(Instant::now());
                                 state.start_position = skip_secs;
@@ -316,7 +309,13 @@ impl AudioPlayer {
                                 state.pause_time = None;
                                 state.current_path = Some(path);
                                 state.is_finished = false;
-                            }
+                                sink.play();
+                                current_sink = Some(sink);
+                                Ok(())
+                            } else {
+                                Err(format!("Could not play '{}': unreadable audio or no audio output", crate::library::file_name(&path)))
+                            };
+                            let _ = reply.send(result);
                         }
                         AudioCommand::Pause => {
                             if let Some(ref sink) = current_sink {
@@ -349,6 +348,7 @@ impl AudioPlayer {
                             state.is_paused = false;
                             state.pause_time = None;
                             state.current_path = None;
+                            state.is_finished = false;
                         }
                         AudioCommand::SetVolume(vol) => {
                             if let Some(ref sink) = current_sink {
@@ -493,6 +493,12 @@ impl AudioPlayer {
     
     pub fn send(&self, cmd: AudioCommand) {
         let _ = self.command_tx.send(cmd);
+    }
+
+    pub fn play(&self, path: String, volume: f32, position: f64) -> Result<(), String> {
+        let (reply, result) = channel();
+        self.send(AudioCommand::Play(path, volume, position, reply));
+        result.recv().map_err(|_| "Audio thread stopped".to_string())?
     }
     
     pub fn get_elapsed(&self) -> f64 {

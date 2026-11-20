@@ -4,7 +4,8 @@ import { playTrack, playSelected, togglePause, stop, nextTrack, prevTrack, setVo
 import { openFolder, loadFolder, reloadContent, renderFolderView } from './views/folder.js';
 import { openArtistView, renderArtistView } from './views/artist.js';
 import { renderPlaylist } from './views/playlist.js';
-import { moveSelectionRelative, selectTrack } from './navigation.js';
+import { moveSelectionRelative, selectTrack, scrollToSelected } from './navigation.js';
+import { applyFilter } from './filter.js';
 import { handleSetCommand, showCurrentSettings } from './settings.js';
 import { setSleepTimer, adjustSleepTimer, setBookmark, showBookmarks, deleteBookmark } from './features.js';
 import { getLibraryFolders, addLibraryFolder, removeLibraryFolder, scanLibrary, showLibraryFolders } from './library.js';
@@ -644,32 +645,27 @@ function sortPlaylist(field) {
         if (state.selectedIndex < 0) state.selectedIndex = 0;
     }
     
-    updateStatus(`Sorted by ${key}${reverse ? ' (reversed)' : ''}`);
-    
-    renderPlaylist();
+    if (state.viewMode === 'list') {
+        if (state.filterText) applyFilter();
+        else renderPlaylist();
+        scrollToSelected();
+    } else if (state.filterText) {
+        state.filteredPlaylist = [];
+    }
     syncBackendPlaylist();
+    updateStatus(`Sorted by ${key}${reverse ? ' (reversed)' : ''}`);
 }
 
 export async function revealInExplorer() {
     let path = null;
     
     if (state.viewMode === 'list') {
-        const track = state.filteredPlaylist.length > 0
-            ? state.filteredPlaylist[state.selectedIndex]
-            : state.playlist[state.selectedIndex];
-        path = track?.path;
+        path = state.playlist[state.selectedIndex]?.path;
     } else if (state.viewMode === 'folder') {
-        const contents = state.filteredFolderContents.length > 0
-            ? state.filteredFolderContents
-            : state.folderContents;
-        const item = contents[state.folderSelectedIndex];
-        path = item?.path;
+        path = state.folderContents[state.folderSelectedIndex]?.path;
     } else if (state.viewMode === 'artist') {
         if (state.artistViewMode === 'tracks') {
-            const tracks = state.filteredArtistItems.length > 0
-                ? state.filteredArtistItems.map(f => state.artistTracks[f.index])
-                : state.artistTracks;
-            path = tracks[state.artistSelectedIndex]?.path;
+            path = state.artistTracks[state.artistSelectedIndex]?.path;
         }
     }
     

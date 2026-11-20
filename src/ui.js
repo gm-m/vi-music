@@ -147,12 +147,13 @@ export function updateModeIndicators() {
 export function updateProgressDisplay() {
     // While dragging the progress bar, preview the drag position instead
     const position = state.progressDragPosition ?? state.elapsed;
-    elements.timeElapsed.textContent = formatDuration(position);
+    const formatTime = state.duration > 0 && state.duration < 1 ? formatPreciseTime : formatDuration;
+    elements.timeElapsed.textContent = formatTime(position);
     if (state.settings.remainingtime && state.duration && state.duration > 0) {
         const remaining = Math.max(0, state.duration - position);
-        elements.timeTotal.textContent = `-${formatDuration(remaining)}`;
+        elements.timeTotal.textContent = `-${formatTime(remaining)}`;
     } else {
-        elements.timeTotal.textContent = formatDuration(state.duration);
+        elements.timeTotal.textContent = formatTime(state.duration);
     }
     
     if (state.duration && state.duration > 0) {

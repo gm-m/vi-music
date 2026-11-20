@@ -3,7 +3,7 @@ import { state, elements } from '../state.js';
 import { escapeHtml, formatDuration } from '../utils.js';
 import { updateStatus } from '../ui.js';
 import { playTrack } from '../playback.js';
-import { scrollToSelected } from '../navigation.js';
+import { pushNavHistory, scrollToSelected } from '../navigation.js';
 import { renderPlaylist } from './playlist.js';
 import { updateViewModeIndicator } from './folder.js';
 import { getKeyString, getKeyAction } from '../keybindings.js';
@@ -21,6 +21,7 @@ export async function openArtistView() {
     try {
         const trackPaths = state.playlist.map(t => t.path);
         const artists = await invoke('get_artists', { tracks: trackPaths });
+        pushNavHistory();
         
         state.artistList = artists;
         state.artistSelectedIndex = 0;
@@ -29,7 +30,7 @@ export async function openArtistView() {
         state.viewMode = 'artist';
         
         updateViewModeIndicator();
-        renderArtistView();
+        clearFilter();
         updateStatus(`${artists.length} artists found`);
     } catch (err) {
         updateStatus(`Failed to scan metadata: ${err}`);
@@ -40,6 +41,7 @@ export async function openArtistTracks(artistName) {
     try {
         const trackPaths = state.playlist.map(t => t.path);
         const tracks = await invoke('get_artist_tracks', { artist: artistName, tracks: trackPaths });
+        pushNavHistory();
         
         state.currentArtist = artistName;
         state.artistTracks = tracks;
@@ -47,7 +49,7 @@ export async function openArtistTracks(artistName) {
         state.artistSelectedIndex = 0;
         
         updateViewModeIndicator();
-        renderArtistView();
+        clearFilter();
     } catch (err) {
         updateStatus(`Failed to load artist tracks: ${err}`);
     }

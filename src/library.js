@@ -1,7 +1,9 @@
 import { invoke, open } from './tauri.js';
 import { state, elements } from './state.js';
 import { updateStatus, showLoading, hideLoading } from './ui.js';
-import { renderPlaylist } from './views/playlist.js';
+import { pushNavHistory } from './navigation.js';
+import { clearFilter } from './filter.js';
+import { updateViewModeIndicator } from './views/folder.js';
 
 export async function getLibraryFolders() {
     try {
@@ -80,13 +82,16 @@ export async function scanLibrary() {
         // Update backend playlist with the paths
         const paths = allTracks.map(t => t.path);
         await invoke('set_playlist', { paths });
+        if (state.rootFolder !== 'Library') pushNavHistory();
         
         state.playlist = allTracks;
         state.selectedIndex = 0;
+        state.playingIndex = allTracks.findIndex(track => track.path === state.playingPath);
         state.viewMode = 'list';
         state.rootFolder = 'Library';
         state.currentPlaylistName = null;
-        renderPlaylist();
+        updateViewModeIndicator();
+        clearFilter();
         updateStatus(`Library: ${allTracks.length} tracks from ${folders.length} folder${folders.length > 1 ? 's' : ''}`);
     } catch (err) {
         hideLoading();

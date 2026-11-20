@@ -32,7 +32,7 @@ A minimal, VIM-style music player built with Tauri and vanilla JavaScript.
 | `%` | Go to playing track |
 | `zz` | Center selection in view |
 | `zt` / `zb` | Scroll selection to top/bottom |
-| `Ctrl+o` | Navigate back in history |
+| `Ctrl+o` | Restore the previous playlist, folder, or artist view from navigation history |
 | `Backspace` | Go back / folder up |
 
 ### Playback
@@ -241,7 +241,7 @@ Press `Tab` in command mode to autocomplete command names. Use `Up` and `Down` t
 - `:vol [0-100]` - Set volume
 - `:setdefault` or `:sd` - Set current folder as default (auto-loads on startup)
 - `:cleardefault` or `:cd` - Clear default folder
-- `:save <name>` or `:w <name>` - Save current playlist
+- `:save <name>` or `:w <name>` - Save current playlist. Use the exact saved name to update it. If a different name maps to the same file, choose a distinct name.
 - `:load <name>` or `:e <name>` - Load a saved playlist
 - `:playlists` or `:pl` - Open playlist manager (inside: `j`/`k` navigate, `Enter` load, `dd` delete, `y` duplicate, `r` rename, `q` close)
 - `:rename <old> > <new>` or `:rn` - Rename a playlist
