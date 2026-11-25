@@ -89,6 +89,7 @@ export const state = {
         remainingtime: false, // Show remaining time (countdown) instead of elapsed
         theme: 'default',
         tags: true, // Show title/artist from tags instead of file names
+        analytics: false, // Count qualified listens locally
     },
 };
 

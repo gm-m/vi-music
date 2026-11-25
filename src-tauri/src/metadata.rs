@@ -85,11 +85,18 @@ impl AppState {
     
     // Metadata for the requested paths (in request order). Tags are (re)read only for
     // new or modified files; entries for missing files are dropped from the cache.
-    pub fn track_metadata(&self, paths: &[String]) -> Vec<TrackMeta> {
+    fn track_metadata(&self, paths: &[String], prefer_cached: bool) -> Vec<TrackMeta> {
         self.with_metadata_cache(|cache| {
             let mut dirty = false;
             let mut result = Vec::with_capacity(paths.len());
             for path in paths {
+                // Listening history can include files on a disconnected drive.
+                if prefer_cached {
+                    if let Some(meta) = cache.get(path) {
+                        result.push(meta.clone());
+                        continue;
+                    }
+                }
                 let Some((mtime, size)) = file_stamp(path) else {
                     dirty |= cache.remove(path).is_some();
                     continue;
@@ -110,14 +117,14 @@ impl AppState {
 }
 
 #[tauri::command]
-pub fn scan_metadata(tracks: Vec<String>, state: State<AppState>) -> Result<Vec<TrackMeta>, String> {
-    Ok(state.track_metadata(&tracks))
+pub fn scan_metadata(tracks: Vec<String>, prefer_cached: Option<bool>, state: State<AppState>) -> Result<Vec<TrackMeta>, String> {
+    Ok(state.track_metadata(&tracks, prefer_cached.unwrap_or(false)))
 }
 
 #[tauri::command]
 pub fn get_artists(tracks: Vec<String>, state: State<AppState>) -> Result<Vec<ArtistInfo>, String> {
     let mut artist_counts: HashMap<String, usize> = HashMap::new();
-    for track in state.track_metadata(&tracks) {
+    for track in state.track_metadata(&tracks, false) {
         let artist_name = track.artist.unwrap_or_else(|| "Unknown Artist".to_string());
         *artist_counts.entry(artist_name).or_insert(0) += 1;
     }
@@ -133,7 +140,7 @@ pub fn get_artists(tracks: Vec<String>, state: State<AppState>) -> Result<Vec<Ar
 
 #[tauri::command]
 pub fn get_artist_tracks(artist: String, tracks: Vec<String>, state: State<AppState>) -> Result<Vec<TrackInfo>, String> {
-    let mut result: Vec<TrackInfo> = state.track_metadata(&tracks)
+    let mut result: Vec<TrackInfo> = state.track_metadata(&tracks, false)
         .into_iter()
         .filter(|t| t.artist.as_deref().unwrap_or("Unknown Artist") == artist)
         .map(|t| {

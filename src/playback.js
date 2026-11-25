@@ -6,11 +6,16 @@ import { renderPlaylist } from './views/playlist.js';
 import { handleFolderItemAction, renderFolderView } from './views/folder.js';
 import { updateQueueDisplay, dequeueNextIndex } from './queue.js';
 import { trackLabel, requestTrackTags } from './tags.js';
+import { observeListening } from './stats.js';
 
 let playbackId = 0;
 let finishedPlaybackId = null;
 let playbackRequest = 0;
 let pendingTransportCommands = 0;
+
+export function syncListening(advancing = state.isPlaying && !state.isPaused && finishedPlaybackId !== playbackId) {
+    observeListening(playbackId, state.playingPath, state.duration, advancing);
+}
 
 // View-aware render: re-renders whichever view is currently active
 function renderCurrentView() {
@@ -84,6 +89,7 @@ export async function playTrack(index, seekPosition = null, allowCarryPosition =
         state.isPlaying = true;
         state.isPaused = false;
         state.duration = result.duration;
+        syncListening();
         setElapsed(startPosition);
         const track = state.playlist[state.playingIndex];
         updateNowPlaying(track ? trackLabel(track) : result.name);
@@ -106,6 +112,7 @@ export async function togglePause() {
     try {
         const isPaused = await invoke('toggle_pause');
         state.isPaused = isPaused;
+        syncListening();
         updatePlayButton();
     } catch (err) {
         // No track playing, try to play selected
@@ -125,6 +132,7 @@ export async function stop() {
         state.playingIndex = -1;
         state.playingPath = null;
         state.duration = null;
+        syncListening(false);
         setElapsed(0);
         state.loopA = null;
         state.loopB = null;
@@ -390,6 +398,7 @@ function applyStatus(status) {
     
     setElapsed(status.elapsed);
     state.duration = status.duration;
+    syncListening(!status.is_paused && !status.is_finished);
     
     // Sync speed from backend
     if (status.speed !== state.speed) {
@@ -406,6 +415,7 @@ export async function setupStatusListener(listen) {
     await listen('player-status', (event) => applyStatus(event.payload));
     await listen('track-finished', (event) => {
         finishedPlaybackId = event.payload;
+        if (finishedPlaybackId === playbackId) syncListening(false);
         advanceFinishedPlayback();
     });
 }

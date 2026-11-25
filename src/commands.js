@@ -16,6 +16,7 @@ import { syncBackendPlaylist, parseTime } from './utils.js';
 import { addCue, deleteCue, labelCue, clearCues, listCues, exportCues, importCues, pruneMissing } from './cues.js';
 import { invoke, open } from './tauri.js';
 import { getThemeNames } from './themes.js';
+import { resetListeningStats, showListeningStats } from './stats.js';
 
 const COMMAND_COMPLETIONS = [
     'q', 'quit',
@@ -42,6 +43,7 @@ const COMMAND_COMPLETIONS = [
     'cues',
     'prune',
     'messages', 'mes',
+    'stats',
     'jump', 'j',
     'addlib', 'al',
     'libs', 'library',
@@ -396,6 +398,17 @@ export function executeCommand(cmd) {
             break;
         case 'prune':
             pruneMissing();
+            break;
+        case 'stats':
+            if (rawParts.length === 1) {
+                showListeningStats();
+            } else if (rawParts.length === 2 && rawParts[1].toLowerCase() === 'reset!') {
+                resetListeningStats();
+            } else if (rawParts.length === 2 && rawParts[1].toLowerCase() === 'reset') {
+                updateStatus('To permanently clear all listening statistics, type :stats reset!');
+            } else {
+                updateStatus('Usage: :stats or :stats reset');
+            }
             break;
         case 'messages':
         case 'mes':

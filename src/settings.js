@@ -3,6 +3,7 @@ import { state } from './state.js';
 import { updateStatus, updateProgressDisplay, refreshNowPlaying, showOutput } from './ui.js';
 import { renderCurrentView } from './filter.js';
 import { applyTheme } from './themes.js';
+import { syncListening } from './playback.js';
 
 export async function loadSettings() {
     try {
@@ -35,6 +36,11 @@ function refreshViews() {
     refreshNowPlaying();
 }
 
+function setBooleanSetting(name, value) {
+    state.settings[name] = value;
+    if (name === 'analytics') syncListening();
+}
+
 export async function handleSetCommand(arg) {
     const trimmed = arg.trim();
     
@@ -58,7 +64,7 @@ export async function handleSetCommand(arg) {
         const setting = trimmed.slice(2);
         const resolved = aliases[setting] || setting;
         if (resolved in state.settings && typeof state.settings[resolved] === 'boolean') {
-            state.settings[resolved] = false;
+            setBooleanSetting(resolved, false);
             saveSettings();
             refreshViews();
             updateStatus(`${resolved} disabled`);
@@ -71,7 +77,7 @@ export async function handleSetCommand(arg) {
         const setting = trimmed.slice(0, -1);
         const resolved = aliases[setting] || setting;
         if (resolved in state.settings && typeof state.settings[resolved] === 'boolean') {
-            state.settings[resolved] = !state.settings[resolved];
+            setBooleanSetting(resolved, !state.settings[resolved]);
             saveSettings();
             refreshViews();
             updateStatus(`${resolved} ${state.settings[resolved] ? 'enabled' : 'disabled'}`);
@@ -106,7 +112,7 @@ export async function handleSetCommand(arg) {
             }
             const currentType = typeof state.settings[resolvedSetting];
             if (currentType === 'boolean') {
-                state.settings[resolvedSetting] = value === 'true' || value === '1';
+                setBooleanSetting(resolvedSetting, value === 'true' || value === '1');
             } else if (currentType === 'number') {
                 const num = parseFloat(value);
                 if (!isNaN(num) && num > 0) {
@@ -129,7 +135,7 @@ export async function handleSetCommand(arg) {
     const resolvedName = aliases[trimmed] || trimmed;
     if (resolvedName in state.settings) {
         if (typeof state.settings[resolvedName] === 'boolean') {
-            state.settings[resolvedName] = true;
+            setBooleanSetting(resolvedName, true);
             saveSettings();
             refreshViews();
             updateStatus(`${resolvedName} enabled`);

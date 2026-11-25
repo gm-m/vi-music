@@ -274,6 +274,9 @@ Press `Tab` in command mode to autocomplete command names. Use `Up` and `Down` t
 - `:cue import [file]` - Merge cues from a CUE sheet (without a file, opens a file picker)
 - `:prune` - Remove cues, bookmarks and cached metadata of files that no longer exist
 - `:messages` or `:mes` - Show the message history (`:mes clear` clears it)
+- `:stats` - Show the ten most-played tracks and artists, total listens, distinct tracks and latest listen. The report stays available when collection is off.
+- `:stats reset` - Show the reset confirmation command. Type `:stats reset!` to permanently clear listening history. The collection setting is preserved.
+- `:set analytics` / `:set noanalytics` - Start or stop collecting local listening statistics. Collection is off by default.
 - `:<line>d` - Delete track at line number (e.g., `:5d`)
 - `:<start>,<end>d` - Delete range of tracks (e.g., `:10,20d`)
 - `:set <option>` - Enable a setting (e.g., `:set relativenumber`)
@@ -303,6 +306,11 @@ Press `Tab` in command mode to autocomplete command names. Use `Up` and `Down` t
 | `remainingtime` | `rt` | `false` | Show remaining time (countdown) instead of total duration |
 | `theme` | `th` | `default` | Color theme: `default`, `gruvbox`, `catppuccin`, `light`, or `custom` |
 | `tags` | `tg` | `true` | Show title and artist from tags (loaded for visible tracks) instead of file names |
+| `analytics` | — | `false` | Count listens for the `:stats` report |
+
+A playback counts once after 30 seconds of active listening, or half the track's duration if shorter. For tracks of unknown duration the threshold is 30 seconds. Pausing suspends the clock, seeking adds no time, and replaying starts a new listen. Statistics are stored locally in the app's WebView database as one record per file path.
+
+The artist ranking sums those listens across each artist's tracks, including earlier listening history. Opening the report looks up artist tags for listened tracks using the metadata cache, even with `:set notags`. Listens without an identifiable artist appear separately.
 
 Numeric settings are changed with `:set <setting>=<value>`, e.g., `:set seektime=10`.
 
